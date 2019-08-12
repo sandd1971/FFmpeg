@@ -246,7 +246,19 @@ static int write_frame(AVFilterContext *ctx, FPSContext *s, AVFilterLink *outlin
 
     /* Output a copy of the first buffered frame */
     } else {
-        frame = av_frame_clone(s->frames[0]);
+        //frame = av_frame_clone(s->frames[0]);
+        frame = av_frame_alloc();
+        if (frame) {
+            frame->format = s->frames[0]->format;
+            frame->width = s->frames[0]->width;
+            frame->height = s->frames[0]->height;
+
+            if (av_frame_get_buffer(frame, 32) < 0 ||
+                av_frame_copy(frame, s->frames[0]) < 0 ||
+                av_frame_copy_props(frame, s->frames[0]) < 0)
+                av_frame_free(&frame);
+        }
+
         if (!frame)
             return AVERROR(ENOMEM);
         frame->pts = s->next_pts++;
