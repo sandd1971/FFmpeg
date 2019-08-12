@@ -89,7 +89,7 @@ static int mpegaudio_parse(AVCodecParserContext *s1,
                         avctx->codec_id   = codec_id;
                         if (s->no_bitrate || !avctx->bit_rate) {
                             s->no_bitrate = 1;
-                            avctx->bit_rate += (bit_rate - avctx->bit_rate) / (s->header_count - header_threshold);
+                            avctx->bit_rate = bit_rate;//avctx->bit_rate += (bit_rate - avctx->bit_rate) / (s->header_count - header_threshold);
                         }
                     }
 
