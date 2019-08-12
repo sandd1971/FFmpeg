@@ -1112,6 +1112,12 @@ static int dvbsub_parse_clut_segment(AVCodecContext *avctx,
         if (y == 0)
             alpha = 0xff;
 
+        if (alpha == 0xff) {
+            y = 0;
+            cb = 0x80;
+            cr = 0x80;
+        }
+
         YUV_TO_RGB1_CCIR(cb, cr);
         YUV_TO_RGB2_CCIR(r, g, b, y);
 
