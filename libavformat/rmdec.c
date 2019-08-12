@@ -367,7 +367,7 @@ int ff_rm_read_mdpr_codecdata(AVFormatContext *s, AVIOContext *pb,
             }
         }
     } else {
-        int fps;
+        int fps_den, fps_num;
         if (avio_rl32(pb) != MKTAG('V', 'I', 'D', 'O')) {
         fail1:
             av_log(s, AV_LOG_WARNING, "Unsupported stream type %08x\n", v);
@@ -386,14 +386,30 @@ int ff_rm_read_mdpr_codecdata(AVFormatContext *s, AVIOContext *pb,
         avio_skip(pb, 4); // always zero?
         st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
         st->need_parsing = AVSTREAM_PARSE_TIMESTAMPS;
-        fps = avio_rb32(pb);
+        fps_den = avio_rb16(pb);
+        avio_rb16(pb);
+        fps_num = 1;
+        switch (fps_den) {
+        case 23:
+            fps_den = 24000;
+            fps_num = 1001;
+            break;
+        case 29:
+            fps_den = 30000;
+            fps_num = 1001;
+            break;
+        case 59:
+            fps_den = 60000;
+            fps_num = 1001;
+            break;
+        }
 
         if ((ret = rm_read_extradata(s, pb, st->codecpar, codec_data_size - (avio_tell(pb) - codec_pos))) < 0)
             return ret;
 
-        if (fps > 0) {
+        if (fps_den > 0) {
             av_reduce(&st->avg_frame_rate.den, &st->avg_frame_rate.num,
-                      0x10000, fps, (1 << 30) - 1);
+                      fps_num, fps_den, (1 << 30) - 1);
 #if FF_API_R_FRAME_RATE
             st->r_frame_rate = st->avg_frame_rate;
 #endif
