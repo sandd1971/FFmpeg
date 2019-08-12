@@ -139,6 +139,28 @@ static const int32_t scale_factor_mult2[3][3] = {
     SCALE_GEN(4.0 / 9.0), /* 9 steps */
 };
 
+static unsigned int safe_get_bits(GetBitContext *s, int n) {
+    register int tmp;
+    OPEN_READER(re, s);
+
+    if ((re_index >> 3) < s->buffer_end - s->buffer)
+        UPDATE_CACHE(re, s);
+#ifdef _DEBUG
+    else
+        av_log(NULL, AV_LOG_ERROR, "MPADEC: get_bits overrun\n");
+#endif
+    tmp = SHOW_UBITS(re, s, n);
+    LAST_SKIP_BITS(re, s, n);
+    CLOSE_READER(re, s);
+    return tmp;
+}
+
+#ifdef get_bits
+#undef get_bits
+#endif
+
+#define get_bits safe_get_bits
+
 /**
  * Convert region offsets to region sizes and truncate
  * size to big_values.
