@@ -50,7 +50,7 @@ static void mpegvideo_extract_headers(AVCodecParserContext *s,
     int chroma_format;
     enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
 //FIXME replace the crap with get_bits()
-    s->repeat_pict = 0;
+    s->repeat_pict = 1;
 
     while (buf < buf_end) {
         start_code= -1;
@@ -60,15 +60,17 @@ static void mpegvideo_extract_headers(AVCodecParserContext *s,
         case PICTURE_START_CODE:
             if (bytes_left >= 2) {
                 s->pict_type = (buf[1] >> 3) & 7;
-                if (bytes_left >= 4)
+                if (bytes_left >= 4) {
                     vbv_delay = ((buf[1] & 0x07) << 13) | (buf[2] << 5) | (buf[3] >> 3);
+                    avctx->vbv_delay = vbv_delay;
+                }
             }
             break;
         case SEQ_START_CODE:
             if (bytes_left >= 7) {
                 pc->width  = (buf[0] << 4) | (buf[1] >> 4);
                 pc->height = ((buf[1] & 0x0f) << 8) | buf[2];
-                if(!avctx->width || !avctx->height || !avctx->coded_width || !avctx->coded_height){
+                if(1 || !avctx->width || !avctx->height || !avctx->coded_width || !avctx->coded_height){
                     set_dim_ret = ff_set_dimensions(avctx, pc->width, pc->height);
                     did_set_size=1;
                 }
@@ -159,7 +161,7 @@ static void mpegvideo_extract_headers(AVCodecParserContext *s,
         av_log(avctx, AV_LOG_ERROR, "Failed to set dimensions\n");
 
     if (avctx->codec_id == AV_CODEC_ID_MPEG2VIDEO && bit_rate) {
-        avctx->rc_max_rate = 400LL*bit_rate;
+        avctx->bit_rate = avctx->rc_max_rate = 400LL*bit_rate;
     }
     if (bit_rate &&
         ((avctx->codec_id == AV_CODEC_ID_MPEG1VIDEO && bit_rate != 0x3FFFF) || vbv_delay != 0xFFFF)) {
