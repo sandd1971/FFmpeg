@@ -963,10 +963,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
     *pden = 0;
     switch (st->codecpar->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
-        if (st->r_frame_rate.num && !pc && s->iformat) {
+/*        if (st->r_frame_rate.num && !pc && s->iformat) {
             *pnum = st->r_frame_rate.den;
             *pden = st->r_frame_rate.num;
-        } else if (st->time_base.num * 1000LL > st->time_base.den) {
+        } else */if (st->time_base.num * 1000LL > st->time_base.den) {
             *pnum = st->time_base.num;
             *pden = st->time_base.den;
         } else if (codec_framerate.den * 1000LL > codec_framerate.num) {
@@ -1441,6 +1441,7 @@ static int parse_packet(AVFormatContext *s, AVPacket *pkt, int stream_index)
     uint8_t *data = pkt ? pkt->data : NULL;
     int size      = pkt ? pkt->size : 0;
     int ret = 0, got_output = 0;
+    int pict_type;
 
     if (!pkt) {
         av_init_packet(&flush_pkt);
@@ -1512,6 +1513,10 @@ static int parse_packet(AVFormatContext *s, AVPacket *pkt, int stream_index)
         out_pkt.dts          = st->parser->dts;
         out_pkt.pos          = st->parser->pos;
         out_pkt.flags       |= pkt->flags & AV_PKT_FLAG_DISCARD;
+
+        pict_type = st->parser->pict_type << 28;
+        out_pkt.flags &= 0x0fffffff;
+        out_pkt.flags |= pict_type;
 
         if (st->need_parsing == AVSTREAM_PARSE_FULL_RAW)
             out_pkt.pos = st->parser->frame_offset;
