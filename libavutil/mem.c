@@ -61,6 +61,11 @@ void  free(void *ptr);
 
 #include "mem_internal.h"
 
+#ifdef _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
+
 #define ALIGN (HAVE_AVX512 ? 64 : (HAVE_AVX ? 32 : 16))
 
 /* NOTE: if you want to override these functions with your own
