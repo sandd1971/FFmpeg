@@ -2038,6 +2038,7 @@ int avcodec_parameters_from_context(AVCodecParameters *par,
         par->format              = codec->pix_fmt;
         par->width               = codec->width;
         par->height              = codec->height;
+        par->framerate           = codec->framerate;
         par->field_order         = codec->field_order;
         par->color_range         = codec->color_range;
         par->color_primaries     = codec->color_primaries;

@@ -3955,6 +3955,11 @@ typedef struct AVCodecParameters {
     int height;
 
     /**
+     * Video only. The framerate of the video stream.
+     */
+    AVRational framerate;
+
+    /**
      * Video only. The aspect ratio (width / height) which a single pixel
      * should have when displayed.
      *

@@ -1867,6 +1867,9 @@ return_packet:
     if (is_relative(pkt->pts))
         pkt->pts -= RELATIVE_TS_BASE;
 
+    if (ret >= 0 && st->codecpar && st->internal && st->internal->avctx)
+        avcodec_parameters_from_context(st->codecpar, st->internal->avctx);
+
     return ret;
 }
 

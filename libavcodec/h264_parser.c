@@ -414,6 +414,17 @@ static inline int parse_nal_units(AVCodecParserContext *s,
                 s->format = AV_PIX_FMT_NONE;
             }
 
+            avctx->width = s->width;
+            avctx->height = s->height;
+            avctx->coded_width = s->coded_width;
+            avctx->coded_height = s->coded_height;
+            avctx->pix_fmt = s->format;
+            if (sps->timing_info_present_flag) {
+                avctx->framerate.num = sps->time_scale;
+                avctx->framerate.den = sps->num_units_in_tick;
+                if (sps->fixed_frame_rate_flag)
+                    avctx->framerate.den *= 2;
+            }
             avctx->profile = ff_h264_get_profile(sps);
             avctx->level   = sps->level_idc;
 

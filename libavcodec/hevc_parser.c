@@ -94,6 +94,13 @@ static int hevc_parse_slice_header(AVCodecParserContext *s, H2645NAL *nal,
     s->width        = ps->sps->width  - ow->left_offset - ow->right_offset;
     s->height       = ps->sps->height - ow->top_offset  - ow->bottom_offset;
     s->format       = ps->sps->pix_fmt;
+
+    avctx->width = s->width;
+    avctx->height = s->height;
+    avctx->coded_width = s->coded_width;
+    avctx->coded_height = s->coded_height;
+    avctx->pix_fmt = s->format;
+    
     avctx->profile  = ps->sps->ptl.general_ptl.profile_idc;
     avctx->level    = ps->sps->ptl.general_ptl.level_idc;
 
