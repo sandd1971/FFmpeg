@@ -46,6 +46,11 @@ FF_ENABLE_DEPRECATION_WARNINGS
     pkt->buf                  = NULL;
     pkt->side_data            = NULL;
     pkt->side_data_elems      = 0;
+
+    pkt->pict_type            = AV_PICTURE_TYPE_NONE;
+    pkt->picture_structure    = AV_PICTURE_STRUCTURE_UNKNOWN;
+    pkt->output_picture_number= 0;
+    pkt->nb_fields            = 0;
 }
 
 AVPacket *av_packet_alloc(void)
@@ -570,6 +575,11 @@ FF_ENABLE_DEPRECATION_WARNINGS
 #endif
     dst->flags                = src->flags;
     dst->stream_index         = src->stream_index;
+
+    dst->pict_type            = src->pict_type;
+    dst->picture_structure    = src->picture_structure;
+    dst->output_picture_number= src->output_picture_number;
+    dst->nb_fields            = src->nb_fields;
 
     dst->side_data            = NULL;
     dst->side_data_elems      = 0;
