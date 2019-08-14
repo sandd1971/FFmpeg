@@ -728,6 +728,10 @@ int ff_frame_thread_init(AVCodecContext *avctx)
     FrameThreadContext *fctx;
     int i, err = 0;
 
+#if _WIN32_WINNT < 0x0600 && HAVE_W32THREADS
+    w32thread_init();
+#endif
+
     if (!thread_count) {
         int nb_cpus = av_cpu_count();
 #if FF_API_DEBUG_MV

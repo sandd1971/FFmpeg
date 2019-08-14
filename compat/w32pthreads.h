@@ -29,6 +29,12 @@
 #ifndef COMPAT_W32PTHREADS_H
 #define COMPAT_W32PTHREADS_H
 
+#if _WIN32_WINNT < 0x0600
+
+#include "w32pthreads_xp.h"
+
+#else
+
 /* Build up a pthread-like API using underlying Windows API. Have only static
  * methods so as to not conflict with a potentially linked in pthread-win32
  * library.
@@ -161,5 +167,7 @@ static inline int pthread_cond_signal(pthread_cond_t *cond)
     WakeConditionVariable(cond);
     return 0;
 }
+
+#endif
 
 #endif /* COMPAT_W32PTHREADS_H */
