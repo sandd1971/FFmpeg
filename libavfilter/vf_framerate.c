@@ -26,7 +26,7 @@
  * filter for upsampling or downsampling a progressive source
  */
 
-#define DEBUG
+//#define DEBUG
 
 #include "libavutil/avassert.h"
 #include "libavutil/imgutils.h"
