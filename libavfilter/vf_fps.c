@@ -237,7 +237,7 @@ static int write_frame(AVFilterContext *ctx, FPSContext *s, AVFilterLink *outlin
      * - If we have status (EOF) set, drop frames when we hit the
      *   status timestamp. */
     if ((s->frames_count == 2 && s->frames[1]->pts <= s->next_pts) ||
-        (s->status            && s->status_pts     <= s->next_pts)) {
+        (s->status            && s->status_pts     <  s->next_pts)) {
 
         frame = shift_frame(ctx, s);
         av_frame_free(&frame);
