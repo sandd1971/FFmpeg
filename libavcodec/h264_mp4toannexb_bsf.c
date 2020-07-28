@@ -26,12 +26,14 @@
 
 #include "avcodec.h"
 #include "bsf.h"
+#include "golomb.h"
+#include "h264data.h"
 
 typedef struct H264BSFContext {
     int32_t  sps_offset;
     int32_t  pps_offset;
     uint8_t  length_size;
-    uint8_t  new_idr;
+    uint8_t  pict_type;
     uint8_t  idr_sps_seen;
     uint8_t  idr_pps_seen;
     int      extradata_parsed;
@@ -155,7 +157,7 @@ static int h264_mp4toannexb_init(AVBSFContext *ctx)
             return ret;
 
         s->length_size      = ret;
-        s->new_idr          = 1;
+        s->pict_type        = 0;
         s->idr_sps_seen     = 0;
         s->idr_pps_seen     = 0;
         s->extradata_parsed = 1;
@@ -210,9 +212,9 @@ static int h264_mp4toannexb_filter(AVBSFContext *ctx, AVPacket *out)
             goto fail;
 
         if (unit_type == 7)
-            s->idr_sps_seen = s->new_idr = 1;
+            s->idr_sps_seen = 1;
         else if (unit_type == 8) {
-            s->idr_pps_seen = s->new_idr = 1;
+            s->idr_pps_seen = 1;
             /* if SPS has not been seen yet, prepend the AVCC one to PPS */
             if (!s->idr_sps_seen) {
                 if (s->sps_offset == -1)
@@ -232,18 +234,24 @@ static int h264_mp4toannexb_filter(AVBSFContext *ctx, AVPacket *out)
         /* if this is a new IDR picture following an IDR picture, reset the idr flag.
          * Just check first_mb_in_slice to be 0 as this is the simplest solution.
          * This could be checking idr_pic_id instead, but would complexify the parsing. */
-        if (!s->new_idr && unit_type == 5 && (buf[1] & 0x80))
-            s->new_idr = 1;
+        if (unit_type == 1 || unit_type == 5) {
+            GetBitContext gb;
+            if (init_get_bits8(&gb, buf + 1, buf_end - buf - 1) >= 0) {
+                if (0 == get_ue_golomb_long(&gb)) { // first_mb_in_slice
+                    s->pict_type = get_ue_golomb_31(&gb);
+                    s->pict_type = ff_h264_golomb_to_pict_type[s->pict_type % 5];
+                }
+            }
+        }
 
         /* prepend only to the first type 5 NAL unit of an IDR picture, if no sps/pps are already present */
-        if (s->new_idr && unit_type == 5 && !s->idr_sps_seen && !s->idr_pps_seen) {
+        if (s->pict_type == AV_PICTURE_TYPE_I && !s->idr_sps_seen && !s->idr_pps_seen) {
             if ((ret=alloc_and_copy(out,
                                ctx->par_out->extradata, ctx->par_out->extradata_size,
                                buf, nal_size, 1)) < 0)
                 goto fail;
-            s->new_idr = 0;
         /* if only SPS has been seen, also insert PPS */
-        } else if (s->new_idr && unit_type == 5 && s->idr_sps_seen && !s->idr_pps_seen) {
+        } else if (s->pict_type == AV_PICTURE_TYPE_I && s->idr_sps_seen && !s->idr_pps_seen) {
             if (s->pps_offset == -1) {
                 av_log(ctx, AV_LOG_WARNING, "PPS not present in the stream, nor in AVCC, stream may be unreadable\n");
                 if ((ret = alloc_and_copy(out, NULL, 0, buf, nal_size, 0)) < 0)
@@ -255,11 +263,12 @@ static int h264_mp4toannexb_filter(AVBSFContext *ctx, AVPacket *out)
         } else {
             if ((ret=alloc_and_copy(out, NULL, 0, buf, nal_size, unit_type == 7 || unit_type == 8)) < 0)
                 goto fail;
-            if (!s->new_idr && unit_type == 1) {
-                s->new_idr = 1;
-                s->idr_sps_seen = 0;
-                s->idr_pps_seen = 0;
-            }
+        }
+
+        if (s->pict_type == AV_PICTURE_TYPE_I || unit_type == 1) {
+            s->idr_sps_seen = 0;
+            s->idr_pps_seen = 0;
+            s->pict_type = 0;
         }
 
 next_nal:
