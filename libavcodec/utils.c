@@ -2047,6 +2047,7 @@ int avcodec_parameters_from_context(AVCodecParameters *par,
         par->chroma_location     = codec->chroma_sample_location;
         par->sample_aspect_ratio = codec->sample_aspect_ratio;
         par->video_delay         = codec->has_b_frames;
+        par->initial_padding     = codec->vbv_delay;
         break;
     case AVMEDIA_TYPE_AUDIO:
         par->format           = codec->sample_fmt;
@@ -2102,6 +2103,7 @@ int avcodec_parameters_to_context(AVCodecContext *codec,
         codec->chroma_sample_location = par->chroma_location;
         codec->sample_aspect_ratio    = par->sample_aspect_ratio;
         codec->has_b_frames           = par->video_delay;
+        codec->vbv_delay              = par->initial_padding;
         break;
     case AVMEDIA_TYPE_AUDIO:
         codec->sample_fmt       = par->format;
