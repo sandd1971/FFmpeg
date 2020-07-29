@@ -963,10 +963,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
     *pden = 0;
     switch (st->codecpar->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
-/*        if (st->r_frame_rate.num && !pc && s->iformat) {
+        if (st->r_frame_rate.num && !pc && s->iformat) {
             *pnum = st->r_frame_rate.den;
             *pden = st->r_frame_rate.num;
-        } else */if (st->time_base.num * 1000LL > st->time_base.den) {
+        } else if (st->time_base.num * 1000LL > st->time_base.den) {
             *pnum = st->time_base.num;
             *pden = st->time_base.den;
         } else if (codec_framerate.den * 1000LL > codec_framerate.num) {
