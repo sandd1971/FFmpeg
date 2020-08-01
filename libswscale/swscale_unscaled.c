@@ -35,6 +35,8 @@
 #include "libavutil/avassert.h"
 #include "libavutil/avconfig.h"
 
+#include "ipp.h"
+
 DECLARE_ALIGNED(8, static const uint8_t, dithers)[8][8][8]={
 {
   {   0,  1,  0,  1,  0,  1,  0,  1,},
@@ -390,6 +392,277 @@ static int uyvyToYuv422Wrapper(SwsContext *c, const uint8_t *src[],
                  dstStride[1], srcStride[0]);
 
     return srcSliceH;
+}
+
+static int yuyvToYuv420pWrapper(SwsContext *c, const uint8_t *src[],
+                               int srcStride[], int srcSliceY, int srcSliceH,
+                               uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDstYVU[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY / 2,
+		dstParam[1] + dstStride[1] * srcSliceY / 2,
+	};
+	Ipp32s pDstStepYVU[3] = { dstStride[0], dstStride[2], dstStride[1] };
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr422ToYCrCb420_8u_C2P3R(src[0], srcStride[0], pDstYVU, pDstStepYVU, roiSize);
+
+    if (dstParam[3])
+        fillPlane(dstParam[3], dstStride[3], c->srcW, srcSliceH, srcSliceY, 255);
+
+    return srcSliceH;
+}
+
+static int yuyvToYuv422pWrapper(SwsContext *c, const uint8_t *src[],
+                               int srcStride[], int srcSliceY, int srcSliceH,
+                               uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDst[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[1] + dstStride[1] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY,
+	};
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr422_8u_C2P3R(src[0], srcStride[0], pDst, dstStride, roiSize);
+
+    return srcSliceH;
+}
+
+static int yuyvToUyvyWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr422ToCbYCr422_8u_C2R(src[0], srcStride[0], dst, dstStride[0], roiSize);
+
+	return srcSliceH;
+}
+
+static int yuyvToBGRAWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr422ToBGR_8u_C2C4R(src[0], srcStride[0], dst, dstStride[0], roiSize, 0xff);
+
+	return srcSliceH;
+}
+
+static int uyvyToYuv420pWrapper(SwsContext *c, const uint8_t *src[],
+                               int srcStride[], int srcSliceY, int srcSliceH,
+                               uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDstYVU[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY / 2,
+		dstParam[1] + dstStride[1] * srcSliceY / 2,
+	};
+	Ipp32s pDstStepYVU[3] = { dstStride[0], dstStride[2], dstStride[1] };
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiCbYCr422ToYCrCb420_8u_C2P3R(src[0], srcStride[0], pDstYVU, pDstStepYVU, roiSize);
+
+	if (dstParam[3])
+		fillPlane(dstParam[3], dstStride[3], c->srcW, srcSliceH, srcSliceY, 255);
+
+	return srcSliceH;
+}
+
+static int uyvyToYuv422pWrapper(SwsContext *c, const uint8_t *src[],
+                               int srcStride[], int srcSliceY, int srcSliceH,
+                               uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDst[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[1] + dstStride[1] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY,
+	};
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiCbYCr422ToYCbCr422_8u_C2P3R(src[0], srcStride[0], pDst, dstStride, roiSize);
+
+	return srcSliceH;
+}
+
+static int uyvyToYuyvWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiCbYCr422ToYCbCr422_8u_C2R(src[0], srcStride[0], dst, dstStride[0], roiSize);
+
+	return srcSliceH;
+}
+
+static int uyvyToBGRAWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiCbYCr422ToBGR_8u_C2C4R(src[0], srcStride[0], dst, dstStride[0], roiSize, 0xff);
+
+	return srcSliceH;
+}
+
+static int yuv422pToYuv420pWrapper(
+	SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDst[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[1] + dstStride[1] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY,
+	};
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr422ToYCbCr420_8u_P3R(src, srcStride, pDst, dstStride, roiSize);
+
+	return srcSliceH;
+}
+
+static int yuv420pToYuv422pWrapper(
+	SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDst[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[1] + dstStride[1] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY,
+	};
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr420ToYCbCr422_8u_P3R(src, srcStride, pDst, dstStride, roiSize);
+
+	return srcSliceH;
+}
+
+static int yuv420pToYuy2Wrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	const Ipp8u* (pYVU[3]) = { src[0], src[2], src[1] };
+	Ipp32s pYVUStep[3] = { srcStride[0], srcStride[2], srcStride[1] };
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCrCb420ToYCbCr422_8u_P3C2R(pYVU, pYVUStep, dst, dstStride[0], roiSize);
+
+	return srcSliceH;
+}
+
+static int yuv420pToUyvyWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	const Ipp8u* (pYVU[3]) = { src[0], src[2], src[1] };
+	Ipp32s pYVUStep[3] = { srcStride[0], srcStride[2], srcStride[1] };
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCrCb420ToCbYCr422_8u_P3C2R(pYVU, pYVUStep, dst, dstStride[0], roiSize);
+
+	return srcSliceH;
+}
+
+static int yuv420pToBGRAWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr420ToBGR_8u_P3C4R(src, srcStride, dst, dstStride[0], roiSize, 0xff);
+
+	return srcSliceH;
+}
+
+static int yuv422pToBGRAWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	Ipp32s pSrcStep[3] = { srcStride[0], srcStride[1] * 2, srcStride[2] * 2 };
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiYCbCr420ToBGR_8u_P3C4R(src, pSrcStep, dst, dstStride[0], roiSize, 0xff);
+
+	return srcSliceH;
+}
+
+static int bgraToYuv420pWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDst[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[1] + dstStride[1] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY,
+	};
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiBGRToYCbCr420_8u_AC4P3R(src[0], srcStride[0], pDst, dstStride, roiSize);
+
+	return srcSliceH;
+}
+
+static int bgraToYuv422pWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	Ipp8u* (pDst[3]) =
+	{
+		dstParam[0] + dstStride[0] * srcSliceY,
+		dstParam[1] + dstStride[1] * srcSliceY,
+		dstParam[2] + dstStride[2] * srcSliceY,
+	};
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiBGRToYCbCr422_8u_AC4P3R(src[0], srcStride[0], pDst, dstStride, roiSize);
+
+	return srcSliceH;
+}
+
+static int bgraToYuyvWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiBGRToYCbCr422_8u_AC4C2R(src[0], srcStride[0], dst, dstStride[0], roiSize);
+
+	return srcSliceH;
+}
+
+static int bgraToUyvyWrapper(SwsContext *c, const uint8_t *src[],
+	int srcStride[], int srcSliceY, int srcSliceH,
+	uint8_t *dstParam[], int dstStride[])
+{
+	uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
+	IppiSize roiSize = { c->srcW, srcSliceH };
+
+	ippiBGRToCbYCr422_8u_AC4C2R(src[0], srcStride[0], dst, dstStride[0], roiSize);
+
+	return srcSliceH;
 }
 
 static void gray8aToPacked32(const uint8_t *src, uint8_t *dst, int num_pixels,
@@ -1892,32 +2165,71 @@ void ff_get_unscaled_swscale(SwsContext *c)
         c->swscale = palToRgbWrapper;
 
     if (srcFormat == AV_PIX_FMT_YUV422P) {
-        if (dstFormat == AV_PIX_FMT_YUYV422)
-            c->swscale = yuv422pToYuy2Wrapper;
-        else if (dstFormat == AV_PIX_FMT_UYVY422)
-            c->swscale = yuv422pToUyvyWrapper;
+		if (dstFormat == AV_PIX_FMT_YUYV422)
+			c->swscale = yuv422pToYuy2Wrapper;
+		else if (dstFormat == AV_PIX_FMT_UYVY422)
+			c->swscale = yuv422pToUyvyWrapper;
+		else if (dstFormat == AV_PIX_FMT_YUV420P)
+			c->swscale = yuv422pToYuv420pWrapper;
+		else if (dstFormat == AV_PIX_FMT_BGRA)
+			c->swscale = yuv422pToBGRAWrapper;
     }
 
+	if (srcFormat == AV_PIX_FMT_YUV420P || srcFormat == AV_PIX_FMT_YUVA420P) {
+		if (dstFormat == AV_PIX_FMT_YUYV422)
+			c->swscale = yuv420pToYuy2Wrapper;
+		else if (dstFormat == AV_PIX_FMT_UYVY422)
+			c->swscale = yuv420pToUyvyWrapper;
+		else if (dstFormat == AV_PIX_FMT_YUV422P)
+			c->swscale = yuv420pToYuv422pWrapper;
+		else if (dstFormat == AV_PIX_FMT_BGRA)
+			c->swscale = yuv420pToBGRAWrapper;
+	}
+
+	if (srcFormat == AV_PIX_FMT_BGRA) {
+		if (dstFormat == AV_PIX_FMT_YUV420P)
+			c->swscale = bgraToYuv420pWrapper;
+		else if (dstFormat == AV_PIX_FMT_YUV422P)
+			c->swscale = bgraToYuv422pWrapper;
+		else if (dstFormat == AV_PIX_FMT_YUYV422)
+			c->swscale = bgraToYuyvWrapper;
+		else if (dstFormat == AV_PIX_FMT_UYVY422)
+			c->swscale = bgraToUyvyWrapper;
+	}
+
     /* LQ converters if -sws 0 or -sws 4*/
-    if (c->flags&(SWS_FAST_BILINEAR|SWS_POINT)) {
-        /* yv12_to_yuy2 */
-        if (srcFormat == AV_PIX_FMT_YUV420P || srcFormat == AV_PIX_FMT_YUVA420P) {
-            if (dstFormat == AV_PIX_FMT_YUYV422)
-                c->swscale = planarToYuy2Wrapper;
-            else if (dstFormat == AV_PIX_FMT_UYVY422)
-                c->swscale = planarToUyvyWrapper;
-        }
-    }
-    if (srcFormat == AV_PIX_FMT_YUYV422 &&
-       (dstFormat == AV_PIX_FMT_YUV420P || dstFormat == AV_PIX_FMT_YUVA420P))
-        c->swscale = yuyvToYuv420Wrapper;
-    if (srcFormat == AV_PIX_FMT_UYVY422 &&
-       (dstFormat == AV_PIX_FMT_YUV420P || dstFormat == AV_PIX_FMT_YUVA420P))
-        c->swscale = uyvyToYuv420Wrapper;
-    if (srcFormat == AV_PIX_FMT_YUYV422 && dstFormat == AV_PIX_FMT_YUV422P)
-        c->swscale = yuyvToYuv422Wrapper;
-    if (srcFormat == AV_PIX_FMT_UYVY422 && dstFormat == AV_PIX_FMT_YUV422P)
-        c->swscale = uyvyToYuv422Wrapper;
+//     if (c->flags&(SWS_FAST_BILINEAR|SWS_POINT)) {
+//         /* yv12_to_yuy2 */
+//         if (srcFormat == AV_PIX_FMT_YUV420P || srcFormat == AV_PIX_FMT_YUVA420P) {
+//             if (dstFormat == AV_PIX_FMT_YUYV422)
+//                 c->swscale = planarToYuy2Wrapper;
+//             else if (dstFormat == AV_PIX_FMT_UYVY422)
+//                 c->swscale = planarToUyvyWrapper;
+//         }
+//     }
+	if (srcFormat == AV_PIX_FMT_YUYV422)
+	{
+		if (dstFormat == AV_PIX_FMT_YUV420P || dstFormat == AV_PIX_FMT_YUVA420P)
+			c->swscale = yuyvToYuv420pWrapper;
+		else if (dstFormat == AV_PIX_FMT_YUV422P)
+			c->swscale = yuyvToYuv422pWrapper;
+		else if (dstFormat == AV_PIX_FMT_UYVY422)
+			c->swscale = yuyvToUyvyWrapper;
+		else if (dstFormat == AV_PIX_FMT_BGRA)
+			c->swscale = yuyvToBGRAWrapper;
+	}
+
+	if (srcFormat == AV_PIX_FMT_UYVY422)
+	{
+		if (dstFormat == AV_PIX_FMT_YUV420P || dstFormat == AV_PIX_FMT_YUVA420P)
+			c->swscale = uyvyToYuv420pWrapper;
+		else if (dstFormat == AV_PIX_FMT_YUV422P)
+			c->swscale = uyvyToYuv422pWrapper;
+		else if (dstFormat == AV_PIX_FMT_YUYV422)
+			c->swscale = uyvyToYuyvWrapper;
+		else if (dstFormat == AV_PIX_FMT_BGRA)
+			c->swscale = uyvyToBGRAWrapper;
+	}
 
 #define isPlanarGray(x) (isGray(x) && (x) != AV_PIX_FMT_YA8 && (x) != AV_PIX_FMT_YA16LE && (x) != AV_PIX_FMT_YA16BE)
     /* simple copy */
