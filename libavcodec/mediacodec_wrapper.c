@@ -392,8 +392,6 @@ char *ff_AMediaCodecList_getCodecNameByType(const char *mime, int profile, int e
     struct JNIAMediaCodecListFields jfields = { 0 };
     struct JNIAMediaFormatFields mediaformat_jfields = { 0 };
 
-    jobject format = NULL;
-    jobject codec = NULL;
     jobject codec_name = NULL;
 
     jobject info = NULL;
@@ -467,6 +465,11 @@ char *ff_AMediaCodecList_getCodecNameByType(const char *mime, int profile, int e
                 name = ff_jni_jstring_to_utf_chars(env, codec_name, log_ctx);
                 if (!name) {
                     goto done;
+                }
+
+                if (codec_name) {
+                    (*env)->DeleteLocalRef(env, codec_name);
+                    codec_name = NULL;
                 }
 
                 /* Skip software decoders */
@@ -566,14 +569,6 @@ done_with_info:
     }
 
 done:
-    if (format) {
-        (*env)->DeleteLocalRef(env, format);
-    }
-
-    if (codec) {
-        (*env)->DeleteLocalRef(env, codec);
-    }
-
     if (codec_name) {
         (*env)->DeleteLocalRef(env, codec_name);
     }
@@ -1308,6 +1303,12 @@ int ff_AMediaCodec_delete(FFAMediaCodec* codec)
         ret = AVERROR_EXTERNAL;
     }
 
+    (*env)->DeleteGlobalRef(env, codec->input_buffers);
+    codec->input_buffers = NULL;
+
+    (*env)->DeleteGlobalRef(env, codec->output_buffers);
+    codec->output_buffers = NULL;
+
     (*env)->DeleteGlobalRef(env, codec->object);
     codec->object = NULL;
 
@@ -1337,6 +1338,10 @@ char *ff_AMediaCodec_getName(FFAMediaCodec *codec)
     ret = ff_jni_jstring_to_utf_chars(env, name, codec);
 
 fail:
+    if (name) {
+        (*env)->DeleteLocalRef(env, name);
+    }
+
     return ret;
 }
 
@@ -1432,7 +1437,7 @@ int ff_AMediaCodec_releaseOutputBufferAtTime(FFAMediaCodec *codec, size_t idx, i
 
     JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-    (*env)->CallVoidMethod(env, codec->object, codec->jfields.release_output_buffer_at_time_id, (jint)idx, timestampNs);
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.release_output_buffer_at_time_id, (jint)idx, (jlong)timestampNs);
     if (ff_jni_exception_check(env, 1, codec) < 0) {
         ret = AVERROR_EXTERNAL;
         goto fail;
@@ -1685,5 +1690,20 @@ int ff_AMediaCodec_cleanOutputBuffers(FFAMediaCodec *codec)
     }
 
 fail:
+    return ret;
+}
+
+int ff_Build_SDK_INT(AVCodecContext *avctx)
+{
+    int ret = -1;
+    JNIEnv *env = NULL;
+    jclass versionClass;
+    jfieldID sdkIntFieldID;
+    JNI_GET_ENV_OR_RETURN(env, avctx, -1);
+
+    versionClass = (*env)->FindClass(env, "android/os/Build$VERSION");
+    sdkIntFieldID = (*env)->GetStaticFieldID(env, versionClass, "SDK_INT", "I");
+    ret = (*env)->GetStaticIntField(env, versionClass, sdkIntFieldID);
+    (*env)->DeleteLocalRef(env, versionClass);
     return ret;
 }

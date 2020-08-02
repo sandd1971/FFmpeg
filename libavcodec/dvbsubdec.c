@@ -127,6 +127,7 @@ typedef struct DVBSubContext {
     int compute_edt; /**< if 1 end display time calculated using pts
                           if 0 (Default) calculated using time out */
     int compute_clut;
+    int clut_count2[257][256];
     int substream;
     int64_t prev_start;
     DVBSubRegion *region_list;
@@ -650,13 +651,17 @@ static int dvbsub_read_8bit_string(AVCodecContext *avctx,
     return pixels_read;
 }
 
-static void compute_default_clut(uint8_t *clut, AVSubtitleRect *rect, int w, int h)
+static void compute_default_clut(DVBSubContext *ctx, uint8_t *clut, AVSubtitleRect *rect, int w, int h)
 {
     uint8_t list[256] = {0};
     uint8_t list_inv[256];
     int counttab[256] = {0};
+    int (*counttab2)[256] = ctx->clut_count2;
     int count, i, x, y;
     ptrdiff_t stride = rect->linesize[0];
+
+    memset(ctx->clut_count2, 0 , sizeof(ctx->clut_count2));
+
 #define V(x,y) rect->data[0][(x) + (y)*stride]
     for (y = 0; y<h; y++) {
         for (x = 0; x<w; x++) {
@@ -666,31 +671,32 @@ static void compute_default_clut(uint8_t *clut, AVSubtitleRect *rect, int w, int
             int vt = y     ? V(x,y-1) + 1 : 0;
             int vb = y+1<h ? V(x,y+1) + 1 : 0;
             counttab[v-1] += !!((v!=vl) + (v!=vr) + (v!=vt) + (v!=vb));
+            counttab2[vl][v-1] ++;
+            counttab2[vr][v-1] ++;
+            counttab2[vt][v-1] ++;
+            counttab2[vb][v-1] ++;
         }
     }
 #define L(x,y) list[d[(x) + (y)*stride]]
 
     for (i = 0; i<256; i++) {
-        int scoretab[256] = {0};
+        counttab2[i+1][i] = 0;
+    }
+    for (i = 0; i<256; i++) {
         int bestscore = 0;
         int bestv = 0;
-        for (y = 0; y<h; y++) {
-            for (x = 0; x<w; x++) {
-                uint8_t *d = &rect->data[0][x + y*stride];
-                int v = *d;
-                int l_m = list[v];
-                int l_l = x     ? L(-1, 0) : 1;
-                int l_r = x+1<w ? L( 1, 0) : 1;
-                int l_t = y     ? L( 0,-1) : 1;
-                int l_b = y+1<h ? L( 0, 1) : 1;
-                if (l_m)
-                    continue;
-                scoretab[v] += l_l + l_r + l_t + l_b;
-            }
-        }
+
         for (x = 0; x < 256; x++) {
-            if (scoretab[x]) {
-                int score = 1024LL*scoretab[x] / counttab[x];
+            int scorev = 0;
+            if (list[x])
+                continue;
+            scorev += counttab2[0][x];
+            for (y = 0; y < 256; y++) {
+                scorev += list[y] * counttab2[y+1][x];
+            }
+
+            if (scorev) {
+                int score = 1024LL*scorev / counttab[x];
                 if (score > bestscore) {
                     bestscore = score;
                     bestv = x;
@@ -819,7 +825,7 @@ static int save_subtitle_set(AVCodecContext *avctx, AVSubtitle *sub, int *got_ou
 
             if ((clut == &default_clut && ctx->compute_clut == -1) || ctx->compute_clut == 1) {
                 if (!region->has_computed_clut) {
-                    compute_default_clut(region->computed_clut, rect, rect->w, rect->h);
+                    compute_default_clut(ctx, region->computed_clut, rect, rect->w, rect->h);
                     region->has_computed_clut = 1;
                 }
 
@@ -1267,6 +1273,13 @@ static int dvbsub_parse_region_segment(AVCodecContext *avctx,
         display->y_pos = AV_RB16(buf) & 0xfff;
         buf += 2;
 
+        if (display->x_pos >= region->width ||
+            display->y_pos >= region->height) {
+            av_log(avctx, AV_LOG_ERROR, "Object outside region\n");
+            av_free(display);
+            return AVERROR_INVALIDDATA;
+        }
+
         if ((object->type == 1 || object->type == 2) && buf+1 < buf_end) {
             display->fgcolor = *buf++;
             display->bgcolor = *buf++;
@@ -1571,8 +1584,9 @@ static int dvbsub_parse_display_definition_segment(AVCodecContext *avctx,
     display_def->width   = bytestream_get_be16(&buf) + 1;
     display_def->height  = bytestream_get_be16(&buf) + 1;
     if (!avctx->width || !avctx->height) {
-        avctx->width  = display_def->width;
-        avctx->height = display_def->height;
+        int ret = ff_set_dimensions(avctx, display_def->width, display_def->height);
+        if (ret < 0)
+            return ret;
     }
 
     if (info_byte & 1<<3) { // display_window_flag
@@ -1602,7 +1616,7 @@ static int dvbsub_display_end_segment(AVCodecContext *avctx, const uint8_t *buf,
 }
 
 static int dvbsub_decode(AVCodecContext *avctx,
-                         void *data, int *data_size,
+                         void *data, int *got_sub_ptr,
                          AVPacket *avpkt)
 {
     const uint8_t *buf = avpkt->data;
@@ -1660,7 +1674,7 @@ static int dvbsub_decode(AVCodecContext *avctx,
             int ret = 0;
             switch (segment_type) {
             case DVBSUB_PAGE_SEGMENT:
-                ret = dvbsub_parse_page_segment(avctx, p, segment_length, sub, data_size);
+                ret = dvbsub_parse_page_segment(avctx, p, segment_length, sub, got_sub_ptr);
                 got_segment |= 1;
                 break;
             case DVBSUB_REGION_SEGMENT:
@@ -1682,7 +1696,7 @@ static int dvbsub_decode(AVCodecContext *avctx,
                 got_dds = 1;
                 break;
             case DVBSUB_DISPLAY_SEGMENT:
-                ret = dvbsub_display_end_segment(avctx, p, segment_length, sub, data_size);
+                ret = dvbsub_display_end_segment(avctx, p, segment_length, sub, got_sub_ptr);
                 if (got_segment == 15 && !got_dds && !avctx->width && !avctx->height) {
                     // Default from ETSI EN 300 743 V1.3.1 (7.2.1)
                     avctx->width  = 720;
@@ -1705,12 +1719,12 @@ static int dvbsub_decode(AVCodecContext *avctx,
     // segments then we need no further data.
     if (got_segment == 15) {
         av_log(avctx, AV_LOG_DEBUG, "Missing display_end_segment, emulating\n");
-        dvbsub_display_end_segment(avctx, p, 0, sub, data_size);
+        dvbsub_display_end_segment(avctx, p, 0, sub, got_sub_ptr);
     }
 
 end:
     if(ret < 0) {
-        *data_size = 0;
+        *got_sub_ptr = 0;
         avsubtitle_free(sub);
         return ret;
     } else {

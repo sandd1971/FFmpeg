@@ -419,8 +419,10 @@ static int can_merge_formats(AVFilterFormats *a_arg,
         av_freep(&ret);
         return 1;
     } else {
-        av_freep(&a->formats);
-        av_freep(&b->formats);
+        if (a)
+            av_freep(&a->formats);
+        if (b)
+            av_freep(&b->formats);
         av_freep(&a);
         av_freep(&b);
         return 0;
@@ -679,6 +681,7 @@ static int pick_format(AVFilterLink *link, AVFilterLink *ref)
 
     if (link->type == AVMEDIA_TYPE_VIDEO) {
         if(ref && ref->type == AVMEDIA_TYPE_VIDEO){
+            //FIXME: This should check for AV_PIX_FMT_FLAG_ALPHA after PAL8 pixel format without alpha is implemented
             int has_alpha= av_pix_fmt_desc_get(ref->format)->nb_components % 2 == 0;
             enum AVPixelFormat best= AV_PIX_FMT_NONE;
             int i;

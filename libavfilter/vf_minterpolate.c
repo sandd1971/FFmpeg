@@ -26,11 +26,11 @@
 #include "libavutil/motion_vector.h"
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
-#include "libavutil/pixelutils.h"
 #include "avfilter.h"
 #include "formats.h"
 #include "internal.h"
 #include "video.h"
+#include "scene_sad.h"
 
 #define ME_MODE_BIDIR 0
 #define ME_MODE_BILAT 1
@@ -185,10 +185,11 @@ typedef struct MIContext {
     int64_t out_pts;
     int b_width, b_height, b_count;
     int log2_mb_size;
+    int bitdepth;
 
     int scd_method;
     int scene_changed;
-    av_pixelutils_sad_fn sad;
+    ff_scene_sad_fn sad;
     double prev_mafd;
     double scd_threshold;
 
@@ -229,7 +230,7 @@ static const AVOption minterpolate_options[] = {
     { "scd", "scene change detection method", OFFSET(scd_method), AV_OPT_TYPE_INT, {.i64 = SCD_METHOD_FDIFF}, SCD_METHOD_NONE, SCD_METHOD_FDIFF, FLAGS, "scene" },
         CONST("none",   "disable detection",                    SCD_METHOD_NONE,        "scene"),
         CONST("fdiff",  "frame difference",                     SCD_METHOD_FDIFF,       "scene"),
-    { "scd_threshold", "scene change threshold", OFFSET(scd_threshold), AV_OPT_TYPE_DOUBLE, {.dbl = 5.0}, 0, 100.0, FLAGS },
+    { "scd_threshold", "scene change threshold", OFFSET(scd_threshold), AV_OPT_TYPE_DOUBLE, {.dbl = 10.}, 0, 100.0, FLAGS },
     { NULL }
 };
 
@@ -343,6 +344,7 @@ static int config_input(AVFilterLink *inlink)
 
     mi_ctx->log2_chroma_h = desc->log2_chroma_h;
     mi_ctx->log2_chroma_w = desc->log2_chroma_w;
+    mi_ctx->bitdepth = desc->comp[0].depth;
 
     mi_ctx->nb_planes = av_pix_fmt_count_planes(inlink->format);
 
@@ -383,7 +385,7 @@ static int config_input(AVFilterLink *inlink)
     }
 
     if (mi_ctx->scd_method == SCD_METHOD_FDIFF) {
-        mi_ctx->sad = av_pixelutils_get_sad_fn(3, 3, 2, mi_ctx);
+        mi_ctx->sad = ff_scene_sad_get_fn(mi_ctx->bitdepth == 8 ? 8 : 16);
         if (!mi_ctx->sad)
             return AVERROR(EINVAL);
     }
@@ -826,21 +828,17 @@ static int inject_frame(AVFilterLink *inlink, AVFrame *avf_in)
 static int detect_scene_change(MIContext *mi_ctx)
 {
     AVMotionEstContext *me_ctx = &mi_ctx->me_ctx;
-    int x, y;
-    int linesize = me_ctx->linesize;
     uint8_t *p1 = mi_ctx->frames[1].avf->data[0];
+    ptrdiff_t linesize1 = mi_ctx->frames[1].avf->linesize[0];
     uint8_t *p2 = mi_ctx->frames[2].avf->data[0];
+    ptrdiff_t linesize2 = mi_ctx->frames[2].avf->linesize[0];
 
     if (mi_ctx->scd_method == SCD_METHOD_FDIFF) {
         double ret = 0, mafd, diff;
-        int64_t sad;
-
-        for (sad = y = 0; y < me_ctx->height; y += 8)
-            for (x = 0; x < linesize; x += 8)
-                sad += mi_ctx->sad(p1 + x + y * linesize, linesize, p2 + x + y * linesize, linesize);
-
+        uint64_t sad;
+        mi_ctx->sad(p1, linesize1, p2, linesize2, me_ctx->width, me_ctx->height, &sad);
         emms_c();
-        mafd = (double) sad / (me_ctx->height * me_ctx->width * 3);
+        mafd = (double) sad * 100.0 / (me_ctx->height * me_ctx->width) / (1 << mi_ctx->bitdepth);
         diff = fabs(mafd - mi_ctx->prev_mafd);
         ret  = av_clipf(FFMIN(mafd, diff), 0, 100.0);
         mi_ctx->prev_mafd = mafd;
@@ -1099,6 +1097,7 @@ static void interpolate(AVFilterLink *inlink, AVFrame *avf_out)
     }
 
     if (mi_ctx->scene_changed) {
+        av_log(ctx, AV_LOG_DEBUG, "scene changed, input pts %"PRId64"\n", mi_ctx->frames[1].avf->pts);
         /* duplicate frame */
         av_frame_copy(avf_out, alpha > ALPHA_MAX / 2 ? mi_ctx->frames[2].avf : mi_ctx->frames[1].avf);
         return;
@@ -1122,8 +1121,8 @@ static void interpolate(AVFilterLink *inlink, AVFrame *avf_out)
                 for (y = 0; y < height; y++) {
                     for (x = 0; x < width; x++) {
                         avf_out->data[plane][x + y * avf_out->linesize[plane]] =
-                                          alpha  * mi_ctx->frames[2].avf->data[plane][x + y * mi_ctx->frames[2].avf->linesize[plane]] +
-                            ((ALPHA_MAX - alpha) * mi_ctx->frames[1].avf->data[plane][x + y * mi_ctx->frames[1].avf->linesize[plane]] + 512) >> 10;
+                            (alpha  * mi_ctx->frames[2].avf->data[plane][x + y * mi_ctx->frames[2].avf->linesize[plane]] +
+                             (ALPHA_MAX - alpha) * mi_ctx->frames[1].avf->data[plane][x + y * mi_ctx->frames[1].avf->linesize[plane]] + 512) >> 10;
                     }
                 }
             }

@@ -32,7 +32,6 @@
 #include "libavutil/imgutils.h"
 #include "libavutil/internal.h"
 #include "libavutil/motion_vector.h"
-#include "libavutil/timer.h"
 #include "avcodec.h"
 #include "blockdsp.h"
 #include "h264chroma.h"
@@ -329,6 +328,8 @@ static av_cold int dct_init(MpegEncContext *s)
 
 av_cold void ff_mpv_idct_init(MpegEncContext *s)
 {
+    if (s->codec_id == AV_CODEC_ID_MPEG4)
+        s->idsp.mpeg4_studio_profile = s->studio_profile;
     ff_idctdsp_init(&s->idsp, s->avctx);
 
     /* load & permutate scantables
@@ -345,9 +346,9 @@ av_cold void ff_mpv_idct_init(MpegEncContext *s)
     ff_init_scantable(s->idsp.idct_permutation, &s->intra_v_scantable, ff_alternate_vertical_scan);
 }
 
-static int alloc_picture(MpegEncContext *s, Picture *pic, int shared)
+static int alloc_picture(MpegEncContext *s, Picture *pic)
 {
-    return ff_alloc_picture(s->avctx, pic, &s->me, &s->sc, shared, 0,
+    return ff_alloc_picture(s->avctx, pic, &s->me, &s->sc, 0, 0,
                             s->chroma_x_shift, s->chroma_y_shift, s->out_format,
                             s->mb_stride, s->mb_width, s->mb_height, s->b8_stride,
                             &s->linesize, &s->uvlinesize);
@@ -388,6 +389,8 @@ static int init_duplicate_context(MpegEncContext *s)
     }
 
     FF_ALLOCZ_OR_GOTO(s->avctx, s->block32, sizeof(*s->block32), fail)
+    s->dpcm_direction = 0;
+    FF_ALLOCZ_OR_GOTO(s->avctx, s->dpcm_macroblock, sizeof(*s->dpcm_macroblock), fail)
 
     if (s->avctx->codec_tag == AV_RL32("VCR2")) {
         // exchange uv
@@ -405,7 +408,7 @@ static int init_duplicate_context(MpegEncContext *s)
 
     return 0;
 fail:
-    return -1; // free() through ff_mpv_common_end()
+    return AVERROR(ENOMEM); // free() through ff_mpv_common_end()
 }
 
 static void free_duplicate_context(MpegEncContext *s)
@@ -425,6 +428,7 @@ static void free_duplicate_context(MpegEncContext *s)
     av_freep(&s->me.score_map);
     av_freep(&s->blocks);
     av_freep(&s->block32);
+    av_freep(&s->dpcm_macroblock);
     av_freep(&s->ac_val_base);
     s->block = NULL;
 }
@@ -443,6 +447,8 @@ static void backup_duplicate_context(MpegEncContext *bak, MpegEncContext *src)
     COPY(blocks);
     COPY(block);
     COPY(block32);
+    COPY(dpcm_macroblock);
+    COPY(dpcm_direction);
     COPY(start_mb_y);
     COPY(end_mb_y);
     COPY(me.map_generation);
@@ -462,7 +468,6 @@ int ff_update_duplicate_context(MpegEncContext *dst, MpegEncContext *src)
     MpegEncContext bak;
     int i, ret;
     // FIXME copy only needed parts
-    // START_TIMER
     backup_duplicate_context(&bak, dst);
     memcpy(dst, src, sizeof(MpegEncContext));
     backup_duplicate_context(dst, &bak);
@@ -480,8 +485,6 @@ int ff_update_duplicate_context(MpegEncContext *dst, MpegEncContext *src)
                "scratch buffers.\n");
         return ret;
     }
-    // STOP_TIMER("update_duplicate_context")
-    // about 10k cycles / 0.01 sec for  1000frames on 1ghz with 2 threads
     return 0;
 }
 
@@ -530,6 +533,8 @@ int ff_mpeg_update_thread_context(AVCodecContext *dst,
     s->avctx->coded_width   = s1->avctx->coded_width;
     s->avctx->width         = s1->avctx->width;
     s->avctx->height        = s1->avctx->height;
+
+    s->quarter_sample       = s1->quarter_sample;
 
     s->coded_picture_number = s1->coded_picture_number;
     s->picture_number       = s1->picture_number;
@@ -818,6 +823,8 @@ static void clear_context(MpegEncContext *s)
     s->blocks = NULL;
     s->block32 = NULL;
     memset(s->pblocks, 0, sizeof(s->pblocks));
+    s->dpcm_direction = 0;
+    s->dpcm_macroblock = NULL;
     s->ac_val_base = NULL;
     s->ac_val[0] =
     s->ac_val[1] =
@@ -900,7 +907,7 @@ av_cold int ff_mpv_common_init(MpegEncContext *s)
     if (s->avctx->pix_fmt == AV_PIX_FMT_NONE) {
         av_log(s->avctx, AV_LOG_ERROR,
                "decoding to AV_PIX_FMT_NONE is not supported.\n");
-        return -1;
+        return AVERROR(EINVAL);
     }
 
     if (nb_slices > MAX_THREADS || (nb_slices > s->mb_height && s->mb_height)) {
@@ -916,7 +923,7 @@ av_cold int ff_mpv_common_init(MpegEncContext *s)
 
     if ((s->width || s->height) &&
         av_image_check_size(s->width, s->height, 0, s->avctx))
-        return -1;
+        return AVERROR(EINVAL);
 
     dct_init(s);
 
@@ -928,27 +935,27 @@ av_cold int ff_mpv_common_init(MpegEncContext *s)
         return ret;
 
     FF_ALLOCZ_OR_GOTO(s->avctx, s->picture,
-                      MAX_PICTURE_COUNT * sizeof(Picture), fail);
+                      MAX_PICTURE_COUNT * sizeof(Picture), fail_nomem);
     for (i = 0; i < MAX_PICTURE_COUNT; i++) {
         s->picture[i].f = av_frame_alloc();
         if (!s->picture[i].f)
-            goto fail;
+            goto fail_nomem;
     }
     s->next_picture.f = av_frame_alloc();
     if (!s->next_picture.f)
-        goto fail;
+        goto fail_nomem;
     s->last_picture.f = av_frame_alloc();
     if (!s->last_picture.f)
-        goto fail;
+        goto fail_nomem;
     s->current_picture.f = av_frame_alloc();
     if (!s->current_picture.f)
-        goto fail;
+        goto fail_nomem;
     s->new_picture.f = av_frame_alloc();
     if (!s->new_picture.f)
-        goto fail;
+        goto fail_nomem;
 
-    if (init_context_frame(s))
-        goto fail;
+    if ((ret = init_context_frame(s)))
+        goto fail_nomem;
 
     s->parse_context.state = -1;
 
@@ -962,9 +969,9 @@ av_cold int ff_mpv_common_init(MpegEncContext *s)
             if (i) {
                 s->thread_context[i] = av_memdup(s, sizeof(MpegEncContext));
                 if (!s->thread_context[i])
-                    goto fail;
+                    goto fail_nomem;
             }
-            if (init_duplicate_context(s->thread_context[i]) < 0)
+            if ((ret = init_duplicate_context(s->thread_context[i])) < 0)
                 goto fail;
             s->thread_context[i]->start_mb_y =
                 (s->mb_height * (i) + nb_slices / 2) / nb_slices;
@@ -972,7 +979,7 @@ av_cold int ff_mpv_common_init(MpegEncContext *s)
                 (s->mb_height * (i + 1) + nb_slices / 2) / nb_slices;
         }
     } else {
-        if (init_duplicate_context(s) < 0)
+        if ((ret = init_duplicate_context(s)) < 0)
             goto fail;
         s->start_mb_y = 0;
         s->end_mb_y   = s->mb_height;
@@ -981,9 +988,11 @@ av_cold int ff_mpv_common_init(MpegEncContext *s)
 //     }
 
     return 0;
+ fail_nomem:
+    ret = AVERROR(ENOMEM);
  fail:
     ff_mpv_common_end(s);
-    return -1;
+    return ret;
 }
 
 /**
@@ -1252,7 +1261,7 @@ int ff_mpv_frame_start(MpegEncContext *s, AVCodecContext *avctx)
 
     pic->f->coded_picture_number = s->coded_picture_number++;
 
-    if (alloc_picture(s, pic, 0) < 0)
+    if (alloc_picture(s, pic) < 0)
         return -1;
 
     s->current_picture_ptr = pic;
@@ -1313,7 +1322,7 @@ int ff_mpv_frame_start(MpegEncContext *s, AVCodecContext *avctx)
         s->last_picture_ptr->f->key_frame = 0;
         s->last_picture_ptr->f->pict_type = AV_PICTURE_TYPE_P;
 
-        if (alloc_picture(s, s->last_picture_ptr, 0) < 0) {
+        if (alloc_picture(s, s->last_picture_ptr) < 0) {
             s->last_picture_ptr = NULL;
             return -1;
         }
@@ -1354,7 +1363,7 @@ int ff_mpv_frame_start(MpegEncContext *s, AVCodecContext *avctx)
         s->next_picture_ptr->f->key_frame = 0;
         s->next_picture_ptr->f->pict_type = AV_PICTURE_TYPE_P;
 
-        if (alloc_picture(s, s->next_picture_ptr, 0) < 0) {
+        if (alloc_picture(s, s->next_picture_ptr) < 0) {
             s->next_picture_ptr = NULL;
             return -1;
         }
@@ -2130,23 +2139,55 @@ void mpv_reconstruct_mb_internal(MpegEncContext *s, int16_t block[12][64],
                TODO: Integrate 10-bit properly into mpegvideo.c so that ER works properly */
             if (s->avctx->bits_per_raw_sample > 8){
                 const int act_block_size = block_size * 2;
-                s->idsp.idct_put(dest_y,                           dct_linesize, (int16_t*)(*s->block32)[0]);
-                s->idsp.idct_put(dest_y              + act_block_size, dct_linesize, (int16_t*)(*s->block32)[1]);
-                s->idsp.idct_put(dest_y + dct_offset,              dct_linesize, (int16_t*)(*s->block32)[2]);
-                s->idsp.idct_put(dest_y + dct_offset + act_block_size, dct_linesize, (int16_t*)(*s->block32)[3]);
 
-                dct_linesize = uvlinesize << s->interlaced_dct;
-                dct_offset   = s->interlaced_dct ? uvlinesize : uvlinesize*block_size;
+                if(s->dpcm_direction == 0) {
+                    s->idsp.idct_put(dest_y,                           dct_linesize, (int16_t*)(*s->block32)[0]);
+                    s->idsp.idct_put(dest_y              + act_block_size, dct_linesize, (int16_t*)(*s->block32)[1]);
+                    s->idsp.idct_put(dest_y + dct_offset,              dct_linesize, (int16_t*)(*s->block32)[2]);
+                    s->idsp.idct_put(dest_y + dct_offset + act_block_size, dct_linesize, (int16_t*)(*s->block32)[3]);
 
-                s->idsp.idct_put(dest_cb,              dct_linesize, (int16_t*)(*s->block32)[4]);
-                s->idsp.idct_put(dest_cr,              dct_linesize, (int16_t*)(*s->block32)[5]);
-                s->idsp.idct_put(dest_cb + dct_offset, dct_linesize, (int16_t*)(*s->block32)[6]);
-                s->idsp.idct_put(dest_cr + dct_offset, dct_linesize, (int16_t*)(*s->block32)[7]);
-                if(!s->chroma_x_shift){//Chroma444
-                    s->idsp.idct_put(dest_cb + act_block_size,              dct_linesize, (int16_t*)(*s->block32)[8]);
-                    s->idsp.idct_put(dest_cr + act_block_size,              dct_linesize, (int16_t*)(*s->block32)[9]);
-                    s->idsp.idct_put(dest_cb + act_block_size + dct_offset, dct_linesize, (int16_t*)(*s->block32)[10]);
-                    s->idsp.idct_put(dest_cr + act_block_size + dct_offset, dct_linesize, (int16_t*)(*s->block32)[11]);
+                    dct_linesize = uvlinesize << s->interlaced_dct;
+                    dct_offset   = s->interlaced_dct ? uvlinesize : uvlinesize*block_size;
+
+                    s->idsp.idct_put(dest_cb,              dct_linesize, (int16_t*)(*s->block32)[4]);
+                    s->idsp.idct_put(dest_cr,              dct_linesize, (int16_t*)(*s->block32)[5]);
+                    s->idsp.idct_put(dest_cb + dct_offset, dct_linesize, (int16_t*)(*s->block32)[6]);
+                    s->idsp.idct_put(dest_cr + dct_offset, dct_linesize, (int16_t*)(*s->block32)[7]);
+                    if(!s->chroma_x_shift){//Chroma444
+                        s->idsp.idct_put(dest_cb + act_block_size,              dct_linesize, (int16_t*)(*s->block32)[8]);
+                        s->idsp.idct_put(dest_cr + act_block_size,              dct_linesize, (int16_t*)(*s->block32)[9]);
+                        s->idsp.idct_put(dest_cb + act_block_size + dct_offset, dct_linesize, (int16_t*)(*s->block32)[10]);
+                        s->idsp.idct_put(dest_cr + act_block_size + dct_offset, dct_linesize, (int16_t*)(*s->block32)[11]);
+                    }
+                } else if(s->dpcm_direction == 1) {
+                    int i, w, h;
+                    uint16_t *dest_pcm[3] = {(uint16_t*)dest_y, (uint16_t*)dest_cb, (uint16_t*)dest_cr};
+                    int linesize[3] = {dct_linesize, uvlinesize, uvlinesize};
+                    for(i = 0; i < 3; i++) {
+                        int idx = 0;
+                        int vsub = i ? s->chroma_y_shift : 0;
+                        int hsub = i ? s->chroma_x_shift : 0;
+                        for(h = 0; h < (16 >> vsub); h++){
+                            for(w = 0; w < (16 >> hsub); w++)
+                                dest_pcm[i][w] = (*s->dpcm_macroblock)[i][idx++];
+                            dest_pcm[i] += linesize[i] / 2;
+                        }
+                    }
+                } else if(s->dpcm_direction == -1) {
+                    int i, w, h;
+                    uint16_t *dest_pcm[3] = {(uint16_t*)dest_y, (uint16_t*)dest_cb, (uint16_t*)dest_cr};
+                    int linesize[3] = {dct_linesize, uvlinesize, uvlinesize};
+                    for(i = 0; i < 3; i++) {
+                        int idx = 0;
+                        int vsub = i ? s->chroma_y_shift : 0;
+                        int hsub = i ? s->chroma_x_shift : 0;
+                        dest_pcm[i] += (linesize[i] / 2) * ((16 >> vsub) - 1);
+                        for(h = (16 >> vsub)-1; h >= 1; h--){
+                            for(w = (16 >> hsub)-1; w >= 1; w--)
+                                dest_pcm[i][w] = (*s->dpcm_macroblock)[i][idx++];
+                            dest_pcm[i] -= linesize[i] / 2;
+                        }
+                    }
                 }
             }
             /* dct only in intra block */

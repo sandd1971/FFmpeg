@@ -17,7 +17,6 @@ data_hash=adler32:ed83c166
 [STREAM]
 index=0
 codec_name=hap
-codec_long_name=Vidvox Hap
 profile=unknown
 codec_type=video
 codec_time_base=1/25
@@ -27,6 +26,7 @@ width=127
 height=71
 coded_width=128
 coded_height=72
+closed_captions=0
 has_b_frames=0
 sample_aspect_ratio=1:1
 display_aspect_ratio=127:71
@@ -68,6 +68,6 @@ DISPOSITION:clean_effects=0
 DISPOSITION:attached_pic=0
 DISPOSITION:timed_thumbnails=0
 TAG:language=eng
-TAG:handler_name=DataHandler
+TAG:handler_name=Module de gestion video
 TAG:encoder=HAPAlpha Only
 [/STREAM]

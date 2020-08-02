@@ -260,7 +260,7 @@ static av_cold int init(AVFilterContext *ctx)
 static int query_formats(AVFilterContext *ctx)
 {
     static const enum AVPixelFormat pix_fmts[] = {
-        AV_PIX_FMT_GRAY8, AV_PIX_FMT_GRAY9, AV_PIX_FMT_GRAY10, AV_PIX_FMT_GRAY12, AV_PIX_FMT_GRAY16,
+        AV_PIX_FMT_GRAY8, AV_PIX_FMT_GRAY9, AV_PIX_FMT_GRAY10, AV_PIX_FMT_GRAY12, AV_PIX_FMT_GRAY14, AV_PIX_FMT_GRAY16,
 #define PF_NOALPHA(suf) AV_PIX_FMT_YUV420##suf,  AV_PIX_FMT_YUV422##suf,  AV_PIX_FMT_YUV444##suf
 #define PF_ALPHA(suf)   AV_PIX_FMT_YUVA420##suf, AV_PIX_FMT_YUVA422##suf, AV_PIX_FMT_YUVA444##suf
 #define PF(suf)         PF_NOALPHA(suf), PF_ALPHA(suf)
@@ -349,6 +349,14 @@ static int config_output(AVFilterLink *outlink)
     outlink->frame_rate = mainlink->frame_rate;
     if ((ret = ff_framesync_configure(&s->fs)) < 0)
         return ret;
+
+    outlink->time_base = s->fs.time_base;
+
+    if (av_cmp_q(mainlink->time_base, outlink->time_base) ||
+        av_cmp_q(ctx->inputs[1]->time_base, outlink->time_base))
+        av_log(ctx, AV_LOG_WARNING, "not matching timebases found between first input: %d/%d and second input %d/%d, results may be incorrect!\n",
+               mainlink->time_base.num, mainlink->time_base.den,
+               ctx->inputs[1]->time_base.num, ctx->inputs[1]->time_base.den);
 
     return 0;
 }
