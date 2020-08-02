@@ -383,6 +383,10 @@ typedef struct AVPacket {
     attribute_deprecated
     int64_t convergence_duration;
 #endif
+    int pict_type;
+    enum AVPictureStructure picture_structure;
+    int output_picture_number;
+    int nb_fields;
 } AVPacket;
 
 #define AV_PKT_FLAG_KEY     0x0001 ///< The packet contains a keyframe
