@@ -53,8 +53,6 @@ typedef struct QSVContext {
 
     AVFifoBuffer *async_fifo;
     int zero_consume_run;
-    int buffered_count;
-    int reinit_flag;
 
     enum AVPixelFormat orig_pix_fmt;
     uint32_t fourcc;
