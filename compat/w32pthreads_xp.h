@@ -38,10 +38,13 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <process.h>
+#include <time.h>
 
 #include "libavutil/attributes.h"
+#include "libavutil/common.h"
 #include "libavutil/internal.h"
 #include "libavutil/mem.h"
+#include "libavutil/time.h"
 
 typedef struct pthread_t {
     void *handle;
@@ -51,8 +54,8 @@ typedef struct pthread_t {
 } pthread_t;
 
 typedef struct FF_CRITICAL_SECTION {
-	CRITICAL_SECTION cs;
-	int init_flag;
+    CRITICAL_SECTION cs;
+    int init_flag;
 } FF_CRITICAL_SECTION;
 
 /* the conditional variable api for windows 6.0+ uses critical sections and
@@ -71,6 +74,9 @@ typedef struct pthread_cond_t {
 
 #define PTHREAD_MUTEX_INITIALIZER SRWLOCK_INIT
 #define PTHREAD_COND_INITIALIZER CONDITION_VARIABLE_INIT
+
+#define PTHREAD_CANCEL_ENABLE 1
+#define PTHREAD_CANCEL_DISABLE 0
 
 static av_unused unsigned __stdcall attribute_align_arg win32thread_worker(void *arg)
 {
@@ -111,23 +117,23 @@ static av_unused int pthread_join(pthread_t thread, void **value_ptr)
 
 static inline int pthread_mutex_init(pthread_mutex_t *m, void* attr)
 {
-	InitializeCriticalSection(m);
-	m->init_flag = 1;
-	return 0;
+    InitializeCriticalSection(m);
+    m->init_flag = 1;
+    return 0;
 }
 static inline int pthread_mutex_destroy(pthread_mutex_t *m)
 {
     DeleteCriticalSection(m);
-	m->init_flag = 0;
+    m->init_flag = 0;
     return 0;
 }
 static inline int pthread_mutex_lock(pthread_mutex_t *m)
 {
-	if (!m->init_flag) {
-		InitializeCriticalSection(m);
-		m->init_flag = 1;
-	}
-	EnterCriticalSection(m);
+    if (!m->init_flag) {
+        InitializeCriticalSection(m);
+        m->init_flag = 1;
+    }
+    EnterCriticalSection(m);
     return 0;
 }
 static inline int pthread_mutex_unlock(pthread_mutex_t *m)
@@ -292,12 +298,12 @@ static av_unused int pthread_cond_broadcast(pthread_cond_t *cond)
     return 0;
 }
 
-static av_unused int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
+static av_unused int pthread_cond_wait_with_time(pthread_cond_t *cond, pthread_mutex_t *mutex, DWORD waitTime)
 {
     win32_cond_t *win32_cond = cond->Ptr;
     int last_waiter;
     if (cond_wait) {
-        cond_wait(cond, mutex, INFINITE);
+        cond_wait(cond, mutex, waitTime);
         return 0;
     }
 
@@ -310,7 +316,7 @@ static av_unused int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mu
 
     // unlock the external mutex
     pthread_mutex_unlock(mutex);
-    WaitForSingleObject(win32_cond->semaphore, INFINITE);
+    WaitForSingleObject(win32_cond->semaphore, waitTime);
 
     pthread_mutex_lock(&win32_cond->mtx_waiter_count);
     win32_cond->waiter_count--;
@@ -322,6 +328,20 @@ static av_unused int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mu
 
     // lock the external mutex
     return pthread_mutex_lock(mutex);
+}
+
+static av_unused int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
+{
+    return pthread_cond_wait_with_time(cond, mutex, INFINITE);
+}
+
+static av_unused int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+                                         const struct timespec *abstime)
+{
+    int64_t abs_milli = abstime->tv_sec * 1000LL + abstime->tv_nsec / 1000000;
+    DWORD t = av_clip64(abs_milli - av_gettime() / 1000, 0, UINT32_MAX);
+
+    return pthread_cond_wait_with_time(cond, mutex, t);
 }
 
 static av_unused int pthread_cond_signal(pthread_cond_t *cond)
@@ -347,6 +367,11 @@ static av_unused int pthread_cond_signal(pthread_cond_t *cond)
     }
 
     pthread_mutex_unlock(&win32_cond->mtx_broadcast);
+    return 0;
+}
+
+static inline int pthread_setcancelstate(int state, int *oldstate)
+{
     return 0;
 }
 
