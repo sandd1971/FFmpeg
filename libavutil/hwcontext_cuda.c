@@ -269,7 +269,8 @@ static void cuda_device_uninit(AVHWDeviceContext *device_ctx)
         CudaFunctions *cu = hwctx->internal->cuda_dl;
 
         if (hwctx->internal->is_allocated && hwctx->cuda_ctx) {
-            if (hwctx->internal->flags & AV_CUDA_USE_PRIMARY_CONTEXT)
+            if ((hwctx->internal->flags & AV_CUDA_USE_PRIMARY_CONTEXT) &&
+                cu->cuDevicePrimaryCtxRelease)
                 CHECK_CU(cu->cuDevicePrimaryCtxRelease(hwctx->internal->cuda_device));
             else
                 CHECK_CU(cu->cuCtxDestroy(hwctx->cuda_ctx));
@@ -322,7 +323,10 @@ static int cuda_context_init(AVHWDeviceContext *device_ctx, int flags) {
 
     hwctx->internal->flags = flags;
 
-    if (flags & AV_CUDA_USE_PRIMARY_CONTEXT) {
+    if ((flags & AV_CUDA_USE_PRIMARY_CONTEXT) &&
+        cu->cuDevicePrimaryCtxGetState &&
+        cu->cuDevicePrimaryCtxSetFlags &&
+        cu->cuDevicePrimaryCtxRetain) {
         ret = CHECK_CU(cu->cuDevicePrimaryCtxGetState(hwctx->internal->cuda_device,
                        &dev_flags, &dev_active));
         if (ret < 0)
@@ -425,7 +429,7 @@ static int cuda_device_derive(AVHWDeviceContext *device_ctx,
         return AVERROR(ENOSYS);
     }
 
-    if (!src_uuid) {
+    if (!src_uuid || !cu->cuDeviceGetUuid) {
         av_log(device_ctx, AV_LOG_ERROR,
                "Failed to get UUID of source device.\n");
         goto error;
