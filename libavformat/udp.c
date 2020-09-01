@@ -61,7 +61,7 @@
 #define IPPROTO_UDPLITE                                  136
 #endif
 
-#if HAVE_W32THREADS
+#if HAVE_W32THREADS && _WIN32_WINNT >= 0x0600
 #undef HAVE_PTHREAD_CANCEL
 #define HAVE_PTHREAD_CANCEL 1
 #endif
