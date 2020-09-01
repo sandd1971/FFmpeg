@@ -27,6 +27,10 @@
 #include "libavutil/imgutils.h"
 #include "libavutil/opt.h"
 
+#ifdef DEBUG
+#undef DEBUG
+#endif
+
 #define DVBSUB_PAGE_SEGMENT     0x10
 #define DVBSUB_REGION_SEGMENT   0x11
 #define DVBSUB_CLUT_SEGMENT     0x12

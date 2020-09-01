@@ -29,6 +29,10 @@
 #include "libavutil/imgutils.h"
 #include "libavutil/bswap.h"
 
+#ifdef DEBUG
+#undef DEBUG
+#endif
+
 typedef struct DVDSubContext
 {
   AVClass *class;
