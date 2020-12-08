@@ -32,7 +32,6 @@ typedef struct HWDownloadContext {
     const AVClass *class;
 
     AVBufferRef       *hwframes_ref;
-    AVHWFramesContext *hwframes;
 } HWDownloadContext;
 
 static int hwdownload_query_formats(AVFilterContext *avctx)
@@ -78,8 +77,6 @@ static int hwdownload_config_input(AVFilterLink *inlink)
     ctx->hwframes_ref = av_buffer_ref(inlink->hw_frames_ctx);
     if (!ctx->hwframes_ref)
         return AVERROR(ENOMEM);
-
-    ctx->hwframes = (AVHWFramesContext*)ctx->hwframes_ref->data;
 
     return 0;
 }
@@ -130,20 +127,14 @@ static int hwdownload_filter_frame(AVFilterLink *link, AVFrame *input)
     AVFrame *output = NULL;
     int err;
 
-    if (!ctx->hwframes_ref || !input->hw_frames_ctx) {
+    if (!input->hw_frames_ctx || !input->hw_frames_ctx->data) {
         av_log(ctx, AV_LOG_ERROR, "Input frames must have hardware context.\n");
         err = AVERROR(EINVAL);
         goto fail;
     }
-    if ((void*)ctx->hwframes != input->hw_frames_ctx->data) {
-        av_log(ctx, AV_LOG_ERROR, "Input frame is not the in the configured "
-               "hwframe context.\n");
-        err = AVERROR(EINVAL);
-        goto fail;
-    }
 
-    output = ff_get_video_buffer(outlink, ctx->hwframes->width,
-                                 ctx->hwframes->height);
+    AVHWFramesContext *hwframes = (AVHWFramesContext*)input->hw_frames_ctx->data;
+    output = ff_get_video_buffer(outlink, hwframes->width, hwframes->height);
     if (!output) {
         err = AVERROR(ENOMEM);
         goto fail;
