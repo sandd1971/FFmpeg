@@ -144,7 +144,10 @@ static int cuda_frames_init(AVHWFramesContext *ctx)
     av_pix_fmt_get_chroma_sub_sample(ctx->sw_format, &priv->shift_width, &priv->shift_height);
 
     if (!ctx->pool) {
-        int size = av_image_get_buffer_size(ctx->sw_format, ctx->width, ctx->height, CUDA_FRAME_ALIGNMENT);
+        int h = ctx->height;
+        if (ctx->sw_format == AV_PIX_FMT_YUV420P && (h % 4))
+            h += (4 - (h % 4));
+        int size = av_image_get_buffer_size(ctx->sw_format, ctx->width, h, CUDA_FRAME_ALIGNMENT);
         if (size < 0)
             return size;
 
@@ -174,7 +177,8 @@ static int cuda_get_buffer(AVHWFramesContext *ctx, AVFrame *frame)
     if (ctx->sw_format == AV_PIX_FMT_YUV420P) {
         frame->linesize[1] = frame->linesize[2] = frame->linesize[0] / 2;
         frame->data[2]     = frame->data[1];
-        frame->data[1]     = frame->data[2] + frame->linesize[2] * ctx->height / 2;
+        int h = ctx->height; if (h % 4) h += (4 - (h % 4));
+        frame->data[1]     = frame->data[2] + frame->linesize[2] * h / 2;
     }
 
     frame->format = AV_PIX_FMT_CUDA;
