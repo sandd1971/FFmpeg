@@ -39,6 +39,7 @@
 static const enum AVPixelFormat supported_formats[] = {
     AV_PIX_FMT_NV12,
     AV_PIX_FMT_YUV420P,
+    AV_PIX_FMT_YUV422P,
     AV_PIX_FMT_YUV444P,
     AV_PIX_FMT_P010,
     AV_PIX_FMT_P016,
@@ -213,6 +214,14 @@ static int thumbnail(AVFilterContext *ctx, int *histogram, AVFrame *in)
             histogram + 256, in->data[1], in->width / 2, in->height / 2, in->linesize[1], 1);
         thumbnail_kernel(ctx, s->cu_func_uchar, 1,
             histogram + 512, in->data[2], in->width / 2, in->height / 2, in->linesize[2], 1);
+        break;
+    case AV_PIX_FMT_YUV422P:
+        thumbnail_kernel(ctx, s->cu_func_uchar, 1,
+            histogram, in->data[0], in->width, in->height, in->linesize[0], 1);
+        thumbnail_kernel(ctx, s->cu_func_uchar, 1,
+            histogram + 256, in->data[1], in->width / 2, in->height, in->linesize[1], 1);
+        thumbnail_kernel(ctx, s->cu_func_uchar, 1,
+            histogram + 512, in->data[2], in->width / 2, in->height, in->linesize[2], 1);
         break;
     case AV_PIX_FMT_YUV444P:
         thumbnail_kernel(ctx, s->cu_func_uchar, 1,
