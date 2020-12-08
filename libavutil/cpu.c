@@ -266,7 +266,7 @@ int av_parse_cpu_caps(unsigned *flags, const char *s)
 
 int av_cpu_count(void)
 {
-    static volatile int printed;
+    static volatile int printed = 0;
 
     int nb_cpus = 1;
 #if HAVE_WINRT
