@@ -119,6 +119,7 @@ pps:
         av_log(ctx, AV_LOG_WARNING,
                "Warning: SPS NALU missing or invalid. "
                "The resulting stream may not play.\n");
+        length_size = AVERROR_BSF_NOT_FOUND;
     }
     if (pps_offset < total_size) {
         s->pps      = out + pps_offset;
@@ -127,6 +128,7 @@ pps:
         av_log(ctx, AV_LOG_WARNING,
                "Warning: PPS NALU missing or invalid. "
                "The resulting stream may not play.\n");
+        length_size = AVERROR_BSF_NOT_FOUND;
     }
 
     av_freep(&ctx->par_out->extradata);
@@ -150,14 +152,16 @@ static int h264_mp4toannexb_init(AVBSFContext *ctx)
                "The input looks like it is Annex B already\n");
     } else if (extra_size >= 7) {
         ret = h264_extradata_to_annexb(ctx, AV_INPUT_BUFFER_PADDING_SIZE);
-        if (ret < 0)
+        if (ret < 0 && ret != AVERROR_BSF_NOT_FOUND)
             return ret;
 
-        s->length_size      = ret;
-        s->new_idr          = 1;
-        s->idr_sps_seen     = 0;
-        s->idr_pps_seen     = 0;
-        s->extradata_parsed = 1;
+        if (ret != AVERROR_BSF_NOT_FOUND) {
+            s->length_size      = ret;
+            s->new_idr          = 1;
+            s->idr_sps_seen     = 0;
+            s->idr_pps_seen     = 0;
+            s->extradata_parsed = 1;
+        }
     } else {
         av_log(ctx, AV_LOG_ERROR, "Invalid extradata size: %d\n", extra_size);
         return AVERROR_INVALIDDATA;
