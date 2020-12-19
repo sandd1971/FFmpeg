@@ -130,7 +130,7 @@ int ff_slice_thread_init(AVCodecContext *avctx)
 {
     SliceThreadContext *c;
     int thread_count = avctx->thread_count;
-    static void (*mainfunc)(void *);
+    void (*mainfunc)(void *);
 
 #if _WIN32_WINNT < 0x0600 && HAVE_W32THREADS
     w32thread_init();

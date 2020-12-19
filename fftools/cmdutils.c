@@ -202,13 +202,14 @@ void show_help_options(const OptionDef *options, const char *msg, int req_flags,
 
 void show_help_children(const AVClass *class, int flags)
 {
-    const AVClass *child = NULL;
+    void *iter = NULL;
+    const AVClass *child;
     if (class->option) {
         av_opt_show2(&class, NULL, flags, 0);
         printf("\n");
     }
 
-    while (child = av_opt_child_class_next(class, child))
+    while (child = av_opt_child_class_iterate(class, &iter))
         show_help_children(child, flags);
 }
 
@@ -2307,7 +2308,7 @@ int show_sources(void *optctx, const char *opt, const char *arg)
     int ret = 0;
     int error_level = av_log_get_level();
 
-    av_log_set_level(AV_LOG_ERROR);
+    av_log_set_level(AV_LOG_WARNING);
 
     if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
         goto fail;
@@ -2345,7 +2346,7 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
     int ret = 0;
     int error_level = av_log_get_level();
 
-    av_log_set_level(AV_LOG_ERROR);
+    av_log_set_level(AV_LOG_WARNING);
 
     if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
         goto fail;
