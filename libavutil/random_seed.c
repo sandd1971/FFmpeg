@@ -26,7 +26,7 @@
 #if HAVE_IO_H
 #include <io.h>
 #endif
-#if HAVE_BCRYPT
+#if HAVE_BCRYPT && _WIN32_WINNT >= 0x0600
 #include <windows.h>
 #include <bcrypt.h>
 #endif
@@ -121,7 +121,7 @@ uint32_t av_get_random_seed(void)
 {
     uint32_t seed;
 
-#if HAVE_BCRYPT
+#if HAVE_BCRYPT && _WIN32_WINNT >= 0x0600
     BCRYPT_ALG_HANDLE algo_handle;
     NTSTATUS ret = BCryptOpenAlgorithmProvider(&algo_handle, BCRYPT_RNG_ALGORITHM,
                                                MS_PRIMITIVE_PROVIDER, 0);
