@@ -174,6 +174,7 @@ static void build_udp_url(RTPContext *s,
                           char *buf, int buf_size,
                           const char *hostname,
                           int port, int local_port,
+                          const char *localaddr,
                           const char *include_sources,
                           const char *exclude_sources)
 {
@@ -191,6 +192,8 @@ static void build_udp_url(RTPContext *s,
     if (s->dscp >= 0)
         url_add_option(buf, buf_size, "dscp=%d", s->dscp);
     url_add_option(buf, buf_size, "fifo_size=0");
+    if (localaddr && localaddr[0])
+        url_add_option(buf, buf_size, "localaddr=%s", localaddr);
     if (include_sources && include_sources[0])
         url_add_option(buf, buf_size, "sources=%s", include_sources);
     if (exclude_sources && exclude_sources[0])
@@ -223,7 +226,7 @@ static int rtp_open(URLContext *h, const char *uri, int flags)
     RTPContext *s = h->priv_data;
     AVDictionary *fec_opts = NULL;
     int rtp_port;
-    char hostname[256], include_sources[1024] = "", exclude_sources[1024] = "";
+    char hostname[256], localaddr[1024] = "", include_sources[1024] = "", exclude_sources[1024] = "";
     char *sources = include_sources, *block = exclude_sources;
     char *fec_protocol = NULL;
     char buf[1024];
@@ -270,6 +273,9 @@ static int rtp_open(URLContext *h, const char *uri, int flags)
         if (av_find_info_tag(buf, sizeof(buf), "timeout", p)) {
             s->rw_timeout = strtol(buf, NULL, 10);
         }
+        if (av_find_info_tag(buf, sizeof(buf), "localaddr", p)) {
+            av_strlcpy(localaddr, buf, sizeof(localaddr));
+        }
         if (av_find_info_tag(buf, sizeof(buf), "sources", p)) {
             av_strlcpy(include_sources, buf, sizeof(include_sources));
             ff_ip_parse_sources(h, buf, &s->filters);
@@ -315,7 +321,7 @@ static int rtp_open(URLContext *h, const char *uri, int flags)
     for (i = 0; i < max_retry_count; i++) {
         build_udp_url(s, buf, sizeof(buf),
                       hostname, rtp_port, s->local_rtpport,
-                      sources, block);
+                      localaddr, sources, block);
         if (ffurl_open_whitelist(&s->rtp_hd, buf, flags, &h->interrupt_callback,
                                  NULL, h->protocol_whitelist, h->protocol_blacklist, h) < 0)
             goto fail;
@@ -329,7 +335,7 @@ static int rtp_open(URLContext *h, const char *uri, int flags)
             s->local_rtcpport = s->local_rtpport + 1;
             build_udp_url(s, buf, sizeof(buf),
                           hostname, s->rtcp_port, s->local_rtcpport,
-                          sources, block);
+                          localaddr, sources, block);
             if (ffurl_open_whitelist(&s->rtcp_hd, buf, rtcpflags,
                                      &h->interrupt_callback, NULL,
                                      h->protocol_whitelist, h->protocol_blacklist, h) < 0) {
@@ -340,7 +346,7 @@ static int rtp_open(URLContext *h, const char *uri, int flags)
         }
         build_udp_url(s, buf, sizeof(buf),
                       hostname, s->rtcp_port, s->local_rtcpport,
-                      sources, block);
+                      localaddr, sources, block);
         if (ffurl_open_whitelist(&s->rtcp_hd, buf, rtcpflags, &h->interrupt_callback,
                                  NULL, h->protocol_whitelist, h->protocol_blacklist, h) < 0)
             goto fail;
