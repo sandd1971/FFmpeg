@@ -4042,6 +4042,8 @@ attribute_deprecated
 const AVBitStreamFilter *av_bsf_next(void **opaque);
 #endif
 
+#ifndef _DEBUG
+
 /* memory */
 
 /**
@@ -4058,6 +4060,16 @@ void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size);
  * be 0-initialized after call.
  */
 void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size);
+
+#else
+
+void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size, const char* f, int l);
+void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size, const char* f, int l);
+
+#define av_fast_padded_malloc(ptr, size, min_size) av_fast_padded_malloc(ptr, size, min_size, __FILE__, __LINE__)
+#define av_fast_padded_mallocz(ptr, size, min_size) av_fast_padded_mallocz(ptr, size, min_size, __FILE__, __LINE__)
+
+#endif
 
 /**
  * Encode extradata length to a buffer. Used by xiph codecs.

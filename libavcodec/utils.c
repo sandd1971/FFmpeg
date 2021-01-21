@@ -36,7 +36,9 @@
 #include "libavutil/hwcontext.h"
 #include "libavutil/internal.h"
 #include "libavutil/mathematics.h"
+#ifndef _DEBUG
 #include "libavutil/mem_internal.h"
+#endif
 #include "libavutil/pixdesc.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/samplefmt.h"
@@ -69,6 +71,8 @@ const char av_codec_ffversion[] = "FFmpeg version " FFMPEG_VERSION;
 
 static AVMutex codec_mutex = AV_MUTEX_INITIALIZER;
 
+#ifndef _DEBUG
+
 void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size)
 {
     uint8_t **p = ptr;
@@ -92,6 +96,8 @@ void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size)
     if (!ff_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, 1))
         memset(*p, 0, min_size + AV_INPUT_BUFFER_PADDING_SIZE);
 }
+
+#endif
 
 int av_codec_is_encoder(const AVCodec *codec)
 {
@@ -2338,3 +2344,56 @@ int ff_int_from_list_or_default(void *ctx, const char * val_name, int val,
            "%s %d are not supported. Set to default value : %d\n", val_name, val, default_value);
     return default_value;
 }
+
+#ifdef _DEBUG
+
+#undef av_malloc
+#undef av_mallocz
+
+#undef av_fast_padded_malloc
+#undef av_fast_padded_mallocz
+
+static inline int ff_fast_malloc(void *ptr, unsigned int *size, size_t min_size, int zero_realloc, const char* f, int l)
+{
+    void *val;
+
+    memcpy(&val, ptr, sizeof(val));
+    if (min_size <= *size) {
+        av_assert0(val || !min_size);
+        return 0;
+    }
+    min_size = FFMAX(min_size + min_size / 16 + 32, min_size);
+    av_freep(ptr);
+    val = zero_realloc ? av_mallocz(min_size, f, l) : av_malloc(min_size, f, l);
+    memcpy(ptr, &val, sizeof(val));
+    if (!val)
+        min_size = 0;
+    *size = min_size;
+    return 1;
+}
+
+void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size, const char* f, int l)
+{
+    uint8_t **p = ptr;
+    if (min_size > SIZE_MAX - AV_INPUT_BUFFER_PADDING_SIZE) {
+        av_freep(p);
+        *size = 0;
+        return;
+    }
+    if (!ff_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, 1, f, l))
+        memset(*p + min_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+}
+
+void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size, const char* f, int l)
+{
+    uint8_t **p = ptr;
+    if (min_size > SIZE_MAX - AV_INPUT_BUFFER_PADDING_SIZE) {
+        av_freep(p);
+        *size = 0;
+        return;
+    }
+    if (!ff_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, 1, f, l))
+        memset(*p, 0, min_size + AV_INPUT_BUFFER_PADDING_SIZE);
+}
+
+#endif
