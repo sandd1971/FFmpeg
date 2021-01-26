@@ -23,7 +23,7 @@
 #include "libavcodec/mpegvideodsp.h"
 #include "libavcodec/videodsp.h"
 
-#if HAVE_INLINE_ASM
+#if HAVE_INLINE_ASM && !defined(_DEBUG)
 
 static void gmc_mmx(uint8_t *dst, uint8_t *src,
                     int stride, int h, int ox, int oy,
@@ -152,7 +152,7 @@ static void gmc_mmx(uint8_t *dst, uint8_t *src,
 
 av_cold void ff_mpegvideodsp_init_x86(MpegVideoDSPContext *c)
 {
-#if HAVE_INLINE_ASM
+#if HAVE_INLINE_ASM && !defined(_DEBUG)
     int cpu_flags = av_get_cpu_flags();
 
     if (INLINE_MMX(cpu_flags))

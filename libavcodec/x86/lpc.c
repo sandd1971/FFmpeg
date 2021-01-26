@@ -29,7 +29,7 @@
 DECLARE_ASM_CONST(16, double, pd_1)[2] = { 1.0, 1.0 };
 DECLARE_ASM_CONST(16, double, pd_2)[2] = { 2.0, 2.0 };
 
-#if HAVE_SSE2_INLINE
+#if HAVE_SSE2_INLINE && !defined(_DEBUG)
 
 static void lpc_apply_welch_window_sse2(const int32_t *data, int len,
                                         double *w_data)
@@ -151,7 +151,7 @@ static void lpc_compute_autocorr_sse2(const double *data, int len, int lag,
 
 av_cold void ff_lpc_init_x86(LPCContext *c)
 {
-#if HAVE_SSE2_INLINE
+#if HAVE_SSE2_INLINE && !defined(_DEBUG)
     int cpu_flags = av_get_cpu_flags();
 
     if (INLINE_SSE2(cpu_flags) || INLINE_SSE2_SLOW(cpu_flags)) {
