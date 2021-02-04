@@ -1506,7 +1506,8 @@ typedef struct AVFormatContext {
      * Flags to enable debugging.
      */
     int debug;
-#define FF_FDEBUG_TS        0x0001
+#define FF_FDEBUG_TS                       0x0001
+#define FF_FDEBUG_IGNORE_INVALID_TS        0x0002
 
     /**
      * Maximum buffering duration for interleaving.

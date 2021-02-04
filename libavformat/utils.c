@@ -1582,7 +1582,8 @@ FF_ENABLE_DEPRECATION_WARNINGS
 
         if (pkt->pts != AV_NOPTS_VALUE &&
             pkt->dts != AV_NOPTS_VALUE &&
-            pkt->pts < pkt->dts) {
+            pkt->pts < pkt->dts &&
+            (s->debug & FF_FDEBUG_IGNORE_INVALID_TS) == 0) {
             av_log(s, AV_LOG_WARNING,
                    "Invalid timestamps stream=%d, pts=%s, dts=%s, size=%d\n",
                    pkt->stream_index,
