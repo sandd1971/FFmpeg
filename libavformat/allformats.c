@@ -94,6 +94,7 @@ extern AVInputFormat  ff_bethsoftvid_demuxer;
 extern AVInputFormat  ff_bfi_demuxer;
 extern AVInputFormat  ff_bintext_demuxer;
 extern AVInputFormat  ff_bink_demuxer;
+extern AVInputFormat  ff_binka_demuxer;
 extern AVInputFormat  ff_bit_demuxer;
 extern AVOutputFormat ff_bit_muxer;
 extern AVInputFormat  ff_bmv_demuxer;
@@ -517,6 +518,7 @@ extern AVInputFormat  ff_image_svg_pipe_demuxer;
 extern AVInputFormat  ff_image_sunrast_pipe_demuxer;
 extern AVInputFormat  ff_image_tiff_pipe_demuxer;
 extern AVInputFormat  ff_image_webp_pipe_demuxer;
+extern AVInputFormat  ff_image_xbm_pipe_demuxer;
 extern AVInputFormat  ff_image_xpm_pipe_demuxer;
 extern AVInputFormat  ff_image_xwd_pipe_demuxer;
 
@@ -541,7 +543,7 @@ const AVOutputFormat *av_muxer_iterate(void **opaque)
 
     if (i < size) {
         f = muxer_list[i];
-    } else if (indev_list) {
+    } else if (outdev_list) {
         f = outdev_list[i - size];
     }
 
@@ -558,7 +560,7 @@ const AVInputFormat *av_demuxer_iterate(void **opaque)
 
     if (i < size) {
         f = demuxer_list[i];
-    } else if (outdev_list) {
+    } else if (indev_list) {
         f = indev_list[i - size];
     }
 

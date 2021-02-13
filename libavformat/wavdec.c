@@ -71,7 +71,7 @@ static void set_spdif(AVFormatContext *s, WAVDemuxContext *wav)
         int ret = ffio_ensure_seekback(s->pb, len);
 
         if (ret >= 0) {
-            uint8_t *buf = av_malloc(len);
+            uint8_t *buf = av_malloc(len + AV_INPUT_BUFFER_PADDING_SIZE);
             if (!buf) {
                 ret = AVERROR(ENOMEM);
             } else {
@@ -643,7 +643,8 @@ break_loop:
     } else if (st->codecpar->codec_id == AV_CODEC_ID_XMA1 ||
                st->codecpar->codec_id == AV_CODEC_ID_XMA2) {
         st->codecpar->block_align = 2048;
-    } else if (st->codecpar->codec_id == AV_CODEC_ID_ADPCM_MS && st->codecpar->channels > 2) {
+    } else if (st->codecpar->codec_id == AV_CODEC_ID_ADPCM_MS && st->codecpar->channels > 2 &&
+               st->codecpar->block_align < INT_MAX / st->codecpar->channels) {
         st->codecpar->block_align *= st->codecpar->channels;
     }
 
@@ -917,11 +918,15 @@ static int w64_read_header(AVFormatContext *s)
                 if (chunk_size == UINT32_MAX || (filesize >= 0 && chunk_size > filesize))
                     return AVERROR_INVALIDDATA;
 
-                value = av_mallocz(chunk_size + 1);
+                value = av_malloc(chunk_size + 1);
                 if (!value)
                     return AVERROR(ENOMEM);
 
                 ret = avio_get_str16le(pb, chunk_size, value, chunk_size);
+                if (ret < 0) {
+                    av_free(value);
+                    return ret;
+                }
                 avio_skip(pb, chunk_size - ret);
 
                 av_dict_set(&s->metadata, chunk_key, value, AV_DICT_DONT_STRDUP_VAL);

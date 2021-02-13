@@ -2126,6 +2126,7 @@ HEADERS_LIST="
     ES2_gl_h
     gsm_h
     io_h
+    linux_dma_buf_h
     linux_perf_event_h
     machine_ioctl_bt848_h
     machine_ioctl_meteor_h
@@ -2652,7 +2653,7 @@ rdft_select="fft"
 
 # decoders / encoders
 aac_decoder_select="adts_header mdct15 mdct sinewin"
-aac_fixed_decoder_select="adts_header mdct sinewin"
+aac_fixed_decoder_select="adts_header mdct"
 aac_encoder_select="audio_frame_queue iirfilter lpc mdct sinewin"
 aac_latm_decoder_select="aac_decoder aac_latm_parser"
 ac3_decoder_select="ac3_parser ac3dsp bswapdsp fmtconvert mdct"
@@ -2847,6 +2848,7 @@ sonic_encoder_select="golomb rangecoder"
 sonic_ls_encoder_select="golomb rangecoder"
 sp5x_decoder_select="mjpeg_decoder"
 speedhq_decoder_select="mpegvideo"
+speedhq_encoder_select="mpegvideoenc"
 srgc_decoder_deps="zlib"
 svq1_decoder_select="hpeldsp"
 svq1_encoder_select="hpeldsp me_cmp mpegvideoenc"
@@ -4267,7 +4269,7 @@ case "$toolchain" in
         ld_default="$source_path/compat/windows/mslink"
         nm_default="dumpbin.exe -symbols"
         ar_default="lib.exe"
-        case "$arch" in
+        case "${arch:-$arch_default}" in
         aarch64|arm64)
             as_default="armasm64.exe"
             ;;
@@ -6152,6 +6154,9 @@ check_headers dxgidebug.h
 check_headers dxva.h
 check_headers dxva2api.h -D_WIN32_WINNT=0x0600
 check_headers io.h
+enabled libdrm &&
+    check_headers linux/dma-buf.h
+
 check_headers linux/perf_event.h
 check_headers libcrystalhd/libcrystalhd_if.h
 check_headers malloc.h
@@ -6404,7 +6409,7 @@ enabled libopus           && {
 }
 enabled libpulse          && require_pkg_config libpulse libpulse pulse/pulseaudio.h pa_context_new
 enabled librabbitmq       && require_pkg_config librabbitmq "librabbitmq >= 0.7.1" amqp.h amqp_new_connection
-enabled librav1e          && require_pkg_config librav1e "rav1e >= 0.1.0" rav1e.h rav1e_context_new
+enabled librav1e          && require_pkg_config librav1e "rav1e >= 0.4.0" rav1e.h rav1e_context_new
 enabled librsvg           && require_pkg_config librsvg librsvg-2.0 librsvg-2.0/librsvg/rsvg.h rsvg_handle_render_cairo
 enabled librtmp           && require_pkg_config librtmp librtmp librtmp/rtmp.h RTMP_Socket
 enabled librubberband     && require_pkg_config librubberband "rubberband >= 1.8.1" rubberband/rubberband-c.h rubberband_new -lstdc++ && append librubberband_extralibs "-lstdc++"
@@ -7571,10 +7576,11 @@ cat > $TMPH <<EOF
 #define FFMPEG_CONFIG_H
 #define FFMPEG_CONFIGURATION "$(c_escape $FFMPEG_CONFIGURATION)"
 #define FFMPEG_LICENSE "$(c_escape $license)"
-#define CONFIG_THIS_YEAR 2020
+#define CONFIG_THIS_YEAR 2021
 #define FFMPEG_DATADIR "$(eval c_escape $datadir)"
 #define AVCONV_DATADIR "$(eval c_escape $datadir)"
 #define CC_IDENT "$(c_escape ${cc_ident:-Unknown compiler})"
+#define OS_NAME $target_os
 #define av_restrict $restrict_keyword
 #define EXTERN_PREFIX "${extern_prefix}"
 #define EXTERN_ASM ${extern_prefix}

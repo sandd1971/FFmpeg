@@ -2025,7 +2025,6 @@ static int mov_write_clli_tag(AVIOContext *pb, MOVTrack *track)
 
     side_data = av_stream_get_side_data(track->st, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, NULL);
     if (!side_data) {
-        av_log(NULL, AV_LOG_VERBOSE, "Not writing 'clli' atom. No content light level info.\n");
         return 0;
     }
     content_light_metadata = (const AVContentLightMetadata*)side_data;
@@ -2052,7 +2051,6 @@ static int mov_write_mdcv_tag(AVIOContext *pb, MOVTrack *track)
     side_data = av_stream_get_side_data(track->st, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, NULL);
     metadata = (const AVMasteringDisplayMetadata*)side_data;
     if (!metadata || !metadata->has_primaries || !metadata->has_luminance) {
-        av_log(NULL, AV_LOG_VERBOSE, "Not writing 'mdcv' atom. Missing mastering metadata.\n");
         return 0;
     }
 
@@ -2904,21 +2902,50 @@ static int mov_write_minf_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext
     return update_size(pb, pos);
 }
 
-static int64_t calc_pts_duration(MOVMuxContext *mov, MOVTrack *track)
+static void get_pts_range(MOVMuxContext *mov, MOVTrack *track,
+                          int64_t *start, int64_t *end)
 {
     if (track->tag == MKTAG('t','m','c','d') && mov->nb_meta_tmcd) {
         // tmcd tracks gets track_duration set in mov_write_moov_tag from
         // another track's duration, while the end_pts may be left at zero.
         // Calculate the pts duration for that track instead.
-        return av_rescale(calc_pts_duration(mov, &mov->tracks[track->src_track]),
-                          track->timescale, mov->tracks[track->src_track].timescale);
+        get_pts_range(mov, &mov->tracks[track->src_track], start, end);
+        *start = av_rescale(*start, track->timescale,
+                            mov->tracks[track->src_track].timescale);
+        *end   = av_rescale(*end, track->timescale,
+                            mov->tracks[track->src_track].timescale);
+        return;
     }
     if (track->end_pts != AV_NOPTS_VALUE &&
         track->start_dts != AV_NOPTS_VALUE &&
         track->start_cts != AV_NOPTS_VALUE) {
-        return track->end_pts - (track->start_dts + track->start_cts);
+        *start = track->start_dts + track->start_cts;
+        *end   = track->end_pts;
+        return;
     }
-    return track->track_duration;
+    *start = 0;
+    *end   = track->track_duration;
+}
+
+static int64_t calc_samples_pts_duration(MOVMuxContext *mov, MOVTrack *track)
+{
+    int64_t start, end;
+    get_pts_range(mov, track, &start, &end);
+    return end - start;
+}
+
+// Calculate the actual duration of the track, after edits.
+// If it starts with a pts < 0, that is removed by the edit list.
+// If it starts with a pts > 0, the edit list adds a delay before that.
+// Thus, with edit lists enabled, the post-edit output of the file is
+// starting with pts=0.
+static int64_t calc_pts_duration(MOVMuxContext *mov, MOVTrack *track)
+{
+    int64_t start, end;
+    get_pts_range(mov, track, &start, &end);
+    if (mov->use_editlist != 0)
+        start = 0;
+    return end - start;
 }
 
 static int mov_write_mdhd_tag(AVIOContext *pb, MOVMuxContext *mov,
@@ -3145,7 +3172,7 @@ static int mov_write_tapt_tag(AVIOContext *pb, MOVTrack *track)
 static int mov_write_edts_tag(AVIOContext *pb, MOVMuxContext *mov,
                               MOVTrack *track)
 {
-    int64_t duration = av_rescale_rnd(calc_pts_duration(mov, track),
+    int64_t duration = av_rescale_rnd(calc_samples_pts_duration(mov, track),
                                       MOV_TIMESCALE, track->timescale,
                                       AV_ROUND_UP);
     int version = duration < INT32_MAX ? 0 : 1;
