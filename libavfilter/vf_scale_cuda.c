@@ -112,6 +112,7 @@ typedef struct CUDAScaleContext {
     int interp_algo;
     int interp_use_linear;
     int interp_as_integer;
+    int interlaced;
 
     float param;
 } CUDAScaleContext;
@@ -557,11 +558,52 @@ static int cudascale_scale(AVFilterContext *ctx, AVFrame *out, AVFrame *in)
     CUDAScaleContext *s = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *src = in;
+    AVFrame *dst = s->frame;
+    int src_h = src->height;
+    int dst_h = dst->height;
     int ret;
 
-    ret = scalecuda_resize(ctx, s->frame, src);
-    if (ret < 0)
-        return ret;
+    if (s->interlaced>0 || (s->interlaced<0 && in->interlaced_frame)) {
+        src->linesize[0] <<= 1;
+        src->linesize[1] <<= 1;
+        src->linesize[2] <<= 1;
+        src->height >>= 1;
+        dst->linesize[0] <<= 1;
+        dst->linesize[1] <<= 1;
+        dst->linesize[2] <<= 1;
+        dst->height >>= 1;
+        ret = scalecuda_resize(ctx, dst, src);
+        if (ret < 0)
+            goto fail;
+        if (src->data[0]) src->data[0] += (src->linesize[0] >> 1);
+        if (src->data[1]) src->data[1] += (src->linesize[1] >> 1);
+        if (src->data[2]) src->data[2] += (src->linesize[2] >> 1);
+        if (dst->data[0]) dst->data[0] += (dst->linesize[0] >> 1);
+        if (dst->data[1]) dst->data[1] += (dst->linesize[1] >> 1);
+        if (dst->data[2]) dst->data[2] += (dst->linesize[2] >> 1);
+        ret = scalecuda_resize(ctx, dst, src);
+        if (src->data[0]) src->data[0] -= (src->linesize[0] >> 1);
+        if (src->data[1]) src->data[1] -= (src->linesize[1] >> 1);
+        if (src->data[2]) src->data[2] -= (src->linesize[2] >> 1);
+        if (dst->data[0]) dst->data[0] -= (dst->linesize[0] >> 1);
+        if (dst->data[1]) dst->data[1] -= (dst->linesize[1] >> 1);
+        if (dst->data[2]) dst->data[2] -= (dst->linesize[2] >> 1);
+fail:
+        src->linesize[0] >>= 1;
+        src->linesize[1] >>= 1;
+        src->linesize[2] >>= 1;
+        src->height = src_h;
+        dst->linesize[0] >>= 1;
+        dst->linesize[1] >>= 1;
+        dst->linesize[2] >>= 1;
+        dst->height = dst_h;
+        if (ret < 0)
+            return ret;
+    } else {
+        ret = scalecuda_resize(ctx, dst, src);
+        if (ret < 0)
+            return ret;
+    }
 
     src = s->frame;
     ret = av_hwframe_get_buffer(src->hw_frames_ctx, s->tmp_frame, 0);
@@ -638,6 +680,7 @@ static AVFrame *cudascale_get_video_buffer(AVFilterLink *inlink, int w, int h)
 static const AVOption options[] = {
     { "w", "Output video width",  OFFSET(w_expr), AV_OPT_TYPE_STRING, { .str = "iw" }, .flags = FLAGS },
     { "h", "Output video height", OFFSET(h_expr), AV_OPT_TYPE_STRING, { .str = "ih" }, .flags = FLAGS },
+    { "interl", "set interlacing", OFFSET(interlaced), AV_OPT_TYPE_BOOL, {.i64 = 0 }, -1, 1, FLAGS },
     { "interp_algo", "Interpolation algorithm used for resizing", OFFSET(interp_algo), AV_OPT_TYPE_INT, { .i64 = INTERP_ALGO_DEFAULT }, 0, INTERP_ALGO_COUNT - 1, FLAGS, "interp_algo" },
         { "nearest",  "nearest neighbour", 0, AV_OPT_TYPE_CONST, { .i64 = INTERP_ALGO_NEAREST }, 0, 0, FLAGS, "interp_algo" },
         { "bilinear", "bilinear", 0, AV_OPT_TYPE_CONST, { .i64 = INTERP_ALGO_BILINEAR }, 0, 0, FLAGS, "interp_algo" },
