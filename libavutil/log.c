@@ -460,6 +460,7 @@ void av_log_set_callback(void (*callback)(void*, int, const char*, va_list))
 static void missing_feature_sample(int sample, void *avc, const char *msg,
                                    va_list argument_list)
 {
+    return;
     av_vlog(avc, AV_LOG_WARNING, msg, argument_list);
     av_log(avc, AV_LOG_WARNING, " is not implemented. Update your FFmpeg "
            "version to the newest one from Git. If the problem still "
