@@ -4178,9 +4178,8 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
     if (mov->normalize_frame_rate && st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && st->internal->nb_index_entries > 0) {
         int64_t min_duration = 0;
         int64_t max_duration = 0;
-        for (i = 1; i <= st->internal->nb_index_entries; i++) {
-            int64_t cur_duration = (i == st->internal->nb_index_entries ?
-                st->duration : st->internal->index_entries[i].timestamp) - st->internal->index_entries[i - 1].timestamp;
+        for (i = 1; i < st->internal->nb_index_entries; i++) {
+            int64_t cur_duration = st->internal->index_entries[i].timestamp - st->internal->index_entries[i - 1].timestamp;
             if (cur_duration > 0) {
                 if (cur_duration < min_duration || min_duration == 0)
                     min_duration = cur_duration;
