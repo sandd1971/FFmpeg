@@ -3796,6 +3796,57 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
     msc->current_index = msc->index_ranges[0].start;
 }
 
+static const AVRational g_standardFramerate[] =
+{
+    { 24, 1 },
+    { 25, 1 },
+    { 30000, 1001 },
+    { 30, 1 },
+    { 50, 1 },
+    { 60000, 1001 },
+    { 60, 1 },
+    { 100, 1 },
+    { 120, 1 },
+    { 150, 1 },
+    { 200, 1 },
+    { 240, 1 },
+};
+
+static int getFramerateIndex(double fps)
+{
+    double diffMax = 10000.0;
+    int selIndex = -1;
+    for (int i = 0; i < _countof(g_standardFramerate); i++)
+    {
+        double diff = fabs(fps - av_q2d(g_standardFramerate[i]));
+        if (diff < diffMax)
+        {
+            diffMax = diff;
+            selIndex = i;
+        }
+    }
+
+    if (selIndex >= 0 && selIndex < _countof(g_standardFramerate))
+        return selIndex;
+
+    return 1;
+}
+
+static int miscNormalizeFramerate(double fps, int* num, int* den)
+{
+    int nFmt = getFramerateIndex(fps);
+    if (nFmt < 0 || nFmt >= _countof(g_standardFramerate))
+    {
+        *num = 25;
+        *den = 1;
+        return 0;
+    }
+
+    *num = g_standardFramerate[nFmt].num;
+    *den = g_standardFramerate[nFmt].den;
+    return 1;
+}
+
 static void mov_build_index(MOVContext *mov, AVStream *st)
 {
     MOVStreamContext *sc = st->priv_data;
@@ -4122,6 +4173,32 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
     }
 
     mov_estimate_video_delay(mov, st);
+
+    // Normalize the Real base framerate of the stream.
+    if (mov->normalize_frame_rate && st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && st->internal->nb_index_entries > 0) {
+        int64_t min_duration = 0;
+        int64_t max_duration = 0;
+        for (i = 1; i <= st->internal->nb_index_entries; i++) {
+            int64_t cur_duration = (i == st->internal->nb_index_entries ?
+                st->duration : st->internal->index_entries[i].timestamp) - st->internal->index_entries[i - 1].timestamp;
+            if (cur_duration > 0) {
+                if (cur_duration < min_duration || min_duration == 0)
+                    min_duration = cur_duration;
+                if (cur_duration > max_duration || max_duration == 0)
+                    max_duration = cur_duration;
+            }
+        }
+        st->event_flags &= ~(AVSTREAM_EVENT_FLAG_CFR | AVSTREAM_EVENT_FLAG_VFR);
+        if (min_duration > 0 && max_duration > 0) {
+            AVRational rfps;
+            miscNormalizeFramerate(1 / (min_duration * av_q2d(st->time_base)), &rfps.num, &rfps.den);
+            if (fabs(min_duration - max_duration) * av_q2d(st->time_base) < 0.4 / av_q2d(rfps))
+                st->event_flags |= AVSTREAM_EVENT_FLAG_CFR;
+            else
+                st->event_flags |= AVSTREAM_EVENT_FLAG_VFR;
+            st->r_frame_rate = rfps;
+        }
+    }
 }
 
 static int test_same_origin(const char *src, const char *ref) {
@@ -4316,7 +4393,7 @@ static int mov_read_trak(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         }
 
 #if FF_API_R_FRAME_RATE
-        if (sc->stts_count == 1 || (sc->stts_count == 2 && sc->stts_data[1].count == 1))
+        if (st->r_frame_rate.num == 0 && (sc->stts_count == 1 || (sc->stts_count == 2 && sc->stts_data[1].count == 1)))
             av_reduce(&st->r_frame_rate.num, &st->r_frame_rate.den,
                       sc->time_scale, sc->stts_data[0].duration, INT_MAX);
 #endif
@@ -8221,6 +8298,10 @@ static const AVOption mov_options[] = {
     { "decryption_key", "The media decryption key (hex)", OFFSET(decryption_key), AV_OPT_TYPE_BINARY, .flags = AV_OPT_FLAG_DECODING_PARAM },
     { "enable_drefs", "Enable external track support.", OFFSET(enable_drefs), AV_OPT_TYPE_BOOL,
         {.i64 = 0}, 0, 1, FLAGS },
+    {"normalize_frame_rate",
+        "Normalize the real base framerate of the video stream",
+        OFFSET(normalize_frame_rate), AV_OPT_TYPE_BOOL, {.i64 = 0},
+        0, 1, FLAGS},
 
     { NULL },
 };

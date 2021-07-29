@@ -1002,6 +1002,9 @@ typedef struct AVStream {
  */
 #define AVSTREAM_EVENT_FLAG_NEW_PACKETS (1 << 1)
 
+#define AVSTREAM_EVENT_FLAG_CFR (1 << 30)
+#define AVSTREAM_EVENT_FLAG_VFR (1 << 31)
+
     /**
      * Real base framerate of the stream.
      * This is the lowest framerate with which all timestamps can be
