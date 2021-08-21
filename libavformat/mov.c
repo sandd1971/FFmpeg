@@ -3798,6 +3798,11 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
 
 static const AVRational g_standardFramerate[] =
 {
+    { 5, 1 },
+    { 10, 1 },
+    { 12, 1 },
+    { 15, 1 },
+    { 24000, 1001 },
     { 24, 1 },
     { 25, 1 },
     { 30000, 1001 },
