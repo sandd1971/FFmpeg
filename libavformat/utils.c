@@ -642,6 +642,14 @@ close:
     if (s->iformat->read_close)
         s->iformat->read_close(s);
 fail:
+    if (options && s && s->metadata) {
+        int64_t list_devices = 0;
+        if (av_opt_get_int(s, "list_devices", AV_OPT_SEARCH_CHILDREN, &list_devices) >= 0 &&
+            list_devices > 0) {
+            av_dict_free(options);
+            av_dict_copy(options, s->metadata, 0);
+        }
+    }
     ff_id3v2_free_extra_meta(&id3v2_extra_meta);
     av_dict_free(&tmp);
     if (s->pb && !(s->flags & AVFMT_FLAG_CUSTOM_IO))

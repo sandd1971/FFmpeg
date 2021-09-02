@@ -216,6 +216,7 @@ dshow_cycle_devices(AVFormatContext *avctx, ICreateDevEnum *devenum,
     int skip = (devtype == VideoDevice) ? ctx->video_device_number
                                         : ctx->audio_device_number;
     int r;
+    int device_count = 0;
 
     const GUID *device_guid[2] = { &CLSID_VideoInputDeviceCategory,
                                    &CLSID_AudioInputDeviceCategory };
@@ -282,8 +283,13 @@ dshow_cycle_devices(AVFormatContext *avctx, ICreateDevEnum *devenum,
                 // success, loop will end now
             }
         } else {
+            char dev_key[32];
+            sprintf(dev_key, "%s_%d", sourcetypename, device_count);
+            av_dict_set(&avctx->metadata, dev_key, friendly_name, 0);
+
             av_log(avctx, AV_LOG_INFO, " \"%s\"\n", friendly_name);
             av_log(avctx, AV_LOG_INFO, "    Alternative name \"%s\"\n", unique_name);
+            device_count++;
         }
 
 fail1:
@@ -299,6 +305,8 @@ fail1:
     }
 
     IEnumMoniker_Release(classenum);
+
+    av_dict_set_int(&avctx->metadata, (sourcetype == VideoSourceDevice) ? "video_device_count" : "audio_device_count", device_count, 0);
 
     if (pfilter) {
         if (!device_filter) {
