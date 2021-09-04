@@ -129,6 +129,21 @@ dshow_read_close(AVFormatContext *s)
     return 0;
 }
 
+static int
+dshow_read_pause(AVFormatContext *s)
+{
+    struct dshow_ctx *ctx = s->priv_data;
+    AVPacketList *pktl;
+
+    s->flags |= AVFMT_FLAG_NONBLOCK;
+    if(ctx->event[0])
+        SetEvent(ctx->event[0]);
+    if(ctx->event[1])
+        SetEvent(ctx->event[1]);
+
+    return 0;
+}
+
 static char *dup_wchar_to_utf8(wchar_t *w)
 {
     char *s = NULL;
@@ -1343,6 +1358,7 @@ AVInputFormat ff_dshow_demuxer = {
     .read_header    = dshow_read_header,
     .read_packet    = dshow_read_packet,
     .read_close     = dshow_read_close,
+    .read_pause     = dshow_read_pause,
     .flags          = AVFMT_NOFILE,
     .priv_class     = &dshow_class,
 };
