@@ -4186,6 +4186,7 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
     if (mov->normalize_frame_rate && st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && st->internal->nb_index_entries > 0) {
         int64_t min_duration = 0;
         int64_t max_duration = 0;
+        int64_t avg_duration = 0;
         for (i = 1; i < st->internal->nb_index_entries; i++) {
             int64_t cur_duration = st->internal->index_entries[i].timestamp - st->internal->index_entries[i - 1].timestamp;
             if (cur_duration > 0) {
@@ -4193,17 +4194,27 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
                     min_duration = cur_duration;
                 if (cur_duration > max_duration || max_duration == 0)
                     max_duration = cur_duration;
+                avg_duration += cur_duration;
             }
         }
         st->event_flags &= ~(AVSTREAM_EVENT_FLAG_CFR | AVSTREAM_EVENT_FLAG_VFR);
         if (min_duration > 0 && max_duration > 0) {
-            AVRational rfps;
-            miscNormalizeFramerate(1 / (min_duration * av_q2d(st->time_base)), &rfps.num, &rfps.den);
-            if (fabs(min_duration - max_duration) * av_q2d(st->time_base) < 0.4 / av_q2d(rfps))
+            AVRational fps_max;
+            AVRational fps_min;
+            AVRational fps_avg;
+            if (st->internal->nb_index_entries > 1)
+                avg_duration = llround(avg_duration * 1.0 / (st->internal->nb_index_entries - 1));
+            miscNormalizeFramerate(1 / (min_duration * av_q2d(st->time_base)), &fps_max.num, &fps_max.den);
+            miscNormalizeFramerate(1 / (max_duration * av_q2d(st->time_base)), &fps_min.num, &fps_min.den);
+            miscNormalizeFramerate(1 / (avg_duration * av_q2d(st->time_base)), &fps_avg.num, &fps_avg.den);
+            if (fabs(av_q2d(fps_max) - av_q2d(fps_min)) < 0.1)
                 st->event_flags |= AVSTREAM_EVENT_FLAG_CFR;
             else
                 st->event_flags |= AVSTREAM_EVENT_FLAG_VFR;
-            st->r_frame_rate = rfps;
+            if (fabs(av_q2d(fps_max) - av_q2d(fps_avg)) < 1.001)
+                st->r_frame_rate = fps_avg;
+            else
+                st->r_frame_rate = fps_max;
         }
     }
 }
