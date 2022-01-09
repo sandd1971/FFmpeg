@@ -180,7 +180,7 @@ static av_cold void imc_init_static(void)
     for (int i = 0, offset = 0; i < 4 ; i++) {
         for (int j = 0; j < 4; j++) {
             huffman_vlc[i][j].table           = &vlc_tables[offset];
-            huffman_vlc[i][j].table_allocated = VLC_TABLES_SIZE - offset;;
+            huffman_vlc[i][j].table_allocated = VLC_TABLES_SIZE - offset;
             ff_init_vlc_from_lengths(&huffman_vlc[i][j], IMC_VLC_BITS, imc_huffman_sizes[i],
                                      imc_huffman_lens[i][j], 1,
                                      imc_huffman_syms[i][j], 1, 1,
@@ -829,7 +829,7 @@ static void imc_get_coeffs(AVCodecContext *avctx,
 static void imc_refine_bit_allocation(IMCContext *q, IMCChannel *chctx)
 {
     int i, j;
-    int bits, summer;
+    int summer;
 
     for (i = 0; i < BANDS; i++) {
         chctx->sumLenArr[i]   = 0;
@@ -853,7 +853,7 @@ static void imc_refine_bit_allocation(IMCContext *q, IMCChannel *chctx)
     }
 
     /* calculate bits left, bits needed and adjust bit allocation */
-    bits = summer = 0;
+    summer = 0;
 
     for (i = 0; i < BANDS; i++) {
         if (chctx->bandFlagsBuf[i]) {
@@ -863,7 +863,6 @@ static void imc_refine_bit_allocation(IMCContext *q, IMCChannel *chctx)
                     chctx->CWlengthT[j] = 0;
                 }
             }
-            bits   += chctx->skipFlagBits[i];
             summer -= chctx->skipFlagBits[i];
         }
     }
@@ -1084,7 +1083,7 @@ static av_cold void flush(AVCodecContext *avctx)
 }
 
 #if CONFIG_IMC_DECODER
-AVCodec ff_imc_decoder = {
+const AVCodec ff_imc_decoder = {
     .name           = "imc",
     .long_name      = NULL_IF_CONFIG_SMALL("IMC (Intel Music Coder)"),
     .type           = AVMEDIA_TYPE_AUDIO,
@@ -1101,7 +1100,7 @@ AVCodec ff_imc_decoder = {
 };
 #endif
 #if CONFIG_IAC_DECODER
-AVCodec ff_iac_decoder = {
+const AVCodec ff_iac_decoder = {
     .name           = "iac",
     .long_name      = NULL_IF_CONFIG_SMALL("IAC (Indeo Audio Coder)"),
     .type           = AVMEDIA_TYPE_AUDIO,
