@@ -682,7 +682,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     int order, field, i, match, sc = 0, ret = 0;
     const int *fxo;
     AVFrame *gen_frames[] = { NULL, NULL, NULL, NULL, NULL };
-    AVFrame *dst;
+    AVFrame *dst = NULL;
 
     /* update frames queue(s) */
 #define SLIDING_FRAME_WINDOW(prv, src, nxt) do {                \
@@ -951,8 +951,8 @@ static int config_input(AVFilterLink *inlink)
     fm->tpitchuv = FFALIGN(w >> 1, 16);
 
     fm->tbuffer = av_calloc((h/2 + 4) * fm->tpitchy, sizeof(*fm->tbuffer));
-    fm->c_array = av_malloc((((w + fm->blockx/2)/fm->blockx)+1) *
-                            (((h + fm->blocky/2)/fm->blocky)+1) *
+    fm->c_array = av_malloc_array((((w + fm->blockx/2)/fm->blockx)+1) *
+                            (((h + fm->blocky/2)/fm->blocky)+1),
                             4 * sizeof(*fm->c_array));
     if (!fm->tbuffer || !fm->c_array)
         return AVERROR(ENOMEM);
@@ -970,13 +970,13 @@ static av_cold int fieldmatch_init(AVFilterContext *ctx)
     };
     int ret;
 
-    if ((ret = ff_insert_inpad(ctx, INPUT_MAIN, &pad)) < 0)
+    if ((ret = ff_append_inpad(ctx, &pad)) < 0)
         return ret;
 
     if (fm->ppsrc) {
         pad.name = "clean_src";
         pad.config_props = NULL;
-        if ((ret = ff_insert_inpad(ctx, INPUT_CLEANSRC, &pad)) < 0)
+        if ((ret = ff_append_inpad(ctx, &pad)) < 0)
             return ret;
     }
 
@@ -1037,19 +1037,18 @@ static const AVFilterPad fieldmatch_outputs[] = {
         .type          = AVMEDIA_TYPE_VIDEO,
         .config_props  = config_output,
     },
-    { NULL }
 };
 
-AVFilter ff_vf_fieldmatch = {
+const AVFilter ff_vf_fieldmatch = {
     .name           = "fieldmatch",
     .description    = NULL_IF_CONFIG_SMALL("Field matching for inverse telecine."),
-    .query_formats  = query_formats,
     .priv_size      = sizeof(FieldMatchContext),
     .init           = fieldmatch_init,
     .activate       = activate,
     .uninit         = fieldmatch_uninit,
     .inputs         = NULL,
-    .outputs        = fieldmatch_outputs,
+    FILTER_OUTPUTS(fieldmatch_outputs),
+    FILTER_QUERY_FUNC(query_formats),
     .priv_class     = &fieldmatch_class,
     .flags          = AVFILTER_FLAG_DYNAMIC_INPUTS,
 };

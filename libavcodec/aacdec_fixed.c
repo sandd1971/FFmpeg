@@ -59,7 +59,6 @@
  */
 
 #define FFT_FLOAT 0
-#define FFT_FIXED_32 1
 #define USE_FIXED 1
 
 #include "libavutil/fixed_dsp.h"
@@ -70,7 +69,7 @@
 #include "fft.h"
 #include "lpc.h"
 #include "kbdwin.h"
-#include "sinewin.h"
+#include "sinewin_fixed_tablegen.h"
 
 #include "aac.h"
 #include "aactab.h"
@@ -86,8 +85,8 @@
 #include <math.h>
 #include <string.h>
 
-DECLARE_ALIGNED(32, static int, AAC_KBD_RENAME(kbd_long_1024))[1024];
-DECLARE_ALIGNED(32, static int, AAC_KBD_RENAME(kbd_short_128))[128];
+DECLARE_ALIGNED(32, static int, AAC_RENAME2(aac_kbd_long_1024))[1024];
+DECLARE_ALIGNED(32, static int, AAC_RENAME2(aac_kbd_short_128))[128];
 
 static av_always_inline void reset_predict_state(PredictorState *ps)
 {
@@ -451,7 +450,7 @@ static void apply_independent_coupling_fixed(AACContext *ac,
 
 #include "aacdec_template.c"
 
-AVCodec ff_aac_fixed_decoder = {
+const AVCodec ff_aac_fixed_decoder = {
     .name            = "aac_fixed",
     .long_name       = NULL_IF_CONFIG_SMALL("AAC (Advanced Audio Coding)"),
     .type            = AVMEDIA_TYPE_AUDIO,

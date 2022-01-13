@@ -42,6 +42,7 @@ typedef struct AV1Frame {
     int temporal_id;
     int spatial_id;
 
+    uint8_t gm_invalid[AV1_NUM_REF_FRAMES];
     uint8_t gm_type[AV1_NUM_REF_FRAMES];
     int32_t gm_params[AV1_NUM_REF_FRAMES][6];
 
@@ -76,9 +77,13 @@ typedef struct AV1DecContext {
     uint16_t tg_start;
     uint16_t tg_end;
 
+    int operating_point_idc;
+
     AV1Frame ref[AV1_NUM_REF_FRAMES];
     AV1Frame cur_frame;
 
+    // AVOptions
+    int operating_point;
 } AV1DecContext;
 
 #endif /* AVCODEC_AV1DEC_H */

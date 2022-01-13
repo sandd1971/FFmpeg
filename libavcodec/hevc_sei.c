@@ -52,9 +52,13 @@ static int decode_nal_sei_decoded_picture_hash(HEVCSEIPictureHash *s, GetBitCont
     return 0;
 }
 
-static int decode_nal_sei_mastering_display_info(HEVCSEIMasteringDisplay *s, GetBitContext *gb)
+static int decode_nal_sei_mastering_display_info(HEVCSEIMasteringDisplay *s, GetBitContext *gb, int size)
 {
     int i;
+
+    if (size < 24)
+        return AVERROR_INVALIDDATA;
+
     // Mastering primaries
     for (i = 0; i < 3; i++) {
         s->display_primaries[i][0] = get_bits(gb, 16);
@@ -67,23 +71,32 @@ static int decode_nal_sei_mastering_display_info(HEVCSEIMasteringDisplay *s, Get
     // Max and min luminance of mastering display
     s->max_luminance = get_bits_long(gb, 32);
     s->min_luminance = get_bits_long(gb, 32);
+    size -= 24;
 
     // As this SEI message comes before the first frame that references it,
     // initialize the flag to 2 and decrement on IRAP access unit so it
     // persists for the coded video sequence (e.g., between two IRAPs)
     s->present = 2;
+
+    skip_bits_long(gb, 8 * size);
     return 0;
 }
 
-static int decode_nal_sei_content_light_info(HEVCSEIContentLight *s, GetBitContext *gb)
+static int decode_nal_sei_content_light_info(HEVCSEIContentLight *s, GetBitContext *gb, int size)
 {
+    if (size < 4)
+        return AVERROR_INVALIDDATA;
+
     // Max and average light levels
     s->max_content_light_level     = get_bits(gb, 16);
     s->max_pic_average_light_level = get_bits(gb, 16);
+    size -= 4;
     // As this SEI message comes before the first frame that references it,
     // initialize the flag to 2 and decrement on IRAP access unit so it
     // persists for the coded video sequence (e.g., between two IRAPs)
     s->present = 2;
+
+    skip_bits_long(gb, 8 * size);
     return  0;
 }
 
@@ -167,9 +180,6 @@ static int decode_registered_user_data_closed_caption(HEVCSEIA53Caption *s, GetB
                                                       int size)
 {
     int ret;
-
-    if (size < 3)
-       return AVERROR_INVALIDDATA;
 
     ret = ff_parse_a53_cc(&s->buf_ref, gb->buffer + get_bits_count(gb) / 8, size);
 
@@ -342,10 +352,16 @@ static int decode_nal_sei_active_parameter_sets(HEVCSEI *s, GetBitContext *gb, v
     return 0;
 }
 
-static int decode_nal_sei_alternative_transfer(HEVCSEIAlternativeTransfer *s, GetBitContext *gb)
+static int decode_nal_sei_alternative_transfer(HEVCSEIAlternativeTransfer *s, GetBitContext *gb, int size)
 {
+    if (size < 1)
+        return AVERROR_INVALIDDATA;
+
     s->present = 1;
     s->preferred_transfer_characteristics = get_bits(gb, 8);
+    size--;
+
+    skip_bits_long(gb, 8 * size);
     return 0;
 }
 
@@ -386,7 +402,7 @@ static int decode_nal_sei_timecode(HEVCSEITimeCode *s, GetBitContext *gb)
 
             s->time_offset_length[i] = get_bits(gb, 5);
             if (s->time_offset_length[i] > 0) {
-                s->time_offset_value[i] = get_bits(gb, s->time_offset_length[i]);
+                s->time_offset_value[i] = get_bits_long(gb, s->time_offset_length[i]);
             }
         }
     }
@@ -395,6 +411,48 @@ static int decode_nal_sei_timecode(HEVCSEITimeCode *s, GetBitContext *gb)
     return 0;
 }
 
+static int decode_film_grain_characteristics(HEVCSEIFilmGrainCharacteristics *h,
+                                             GetBitContext *gb)
+{
+    h->present = !get_bits1(gb); // film_grain_characteristics_cancel_flag
+
+    if (h->present) {
+        memset(h, 0, sizeof(*h));
+        h->model_id = get_bits(gb, 2);
+        h->separate_colour_description_present_flag = get_bits1(gb);
+        if (h->separate_colour_description_present_flag) {
+            h->bit_depth_luma = get_bits(gb, 3) + 8;
+            h->bit_depth_chroma = get_bits(gb, 3) + 8;
+            h->full_range = get_bits1(gb);
+            h->color_primaries = get_bits(gb, 8);
+            h->transfer_characteristics = get_bits(gb, 8);
+            h->matrix_coeffs = get_bits(gb, 8);
+        }
+        h->blending_mode_id = get_bits(gb, 2);
+        h->log2_scale_factor = get_bits(gb, 4);
+        for (int c = 0; c < 3; c++)
+            h->comp_model_present_flag[c] = get_bits1(gb);
+        for (int c = 0; c < 3; c++) {
+            if (h->comp_model_present_flag[c]) {
+                h->num_intensity_intervals[c] = get_bits(gb, 8) + 1;
+                h->num_model_values[c] = get_bits(gb, 3) + 1;
+                if (h->num_model_values[c] > 6)
+                    return AVERROR_INVALIDDATA;
+                for (int i = 0; i < h->num_intensity_intervals[c]; i++) {
+                    h->intensity_interval_lower_bound[c][i] = get_bits(gb, 8);
+                    h->intensity_interval_upper_bound[c][i] = get_bits(gb, 8);
+                    for (int j = 0; j < h->num_model_values[c]; j++)
+                        h->comp_model_value[c][i][j] = get_se_golomb_long(gb);
+                }
+            }
+        }
+        h->persistence_flag = get_bits1(gb);
+
+        h->present = 1;
+    }
+
+    return 0;
+}
 
 static int decode_nal_sei_prefix(GetBitContext *gb, void *logctx, HEVCSEI *s,
                                  const HEVCParamSets *ps, int type, int size)
@@ -402,26 +460,28 @@ static int decode_nal_sei_prefix(GetBitContext *gb, void *logctx, HEVCSEI *s,
     switch (type) {
     case 256:  // Mismatched value from HM 8.1
         return decode_nal_sei_decoded_picture_hash(&s->picture_hash, gb);
-    case HEVC_SEI_TYPE_FRAME_PACKING:
+    case SEI_TYPE_FRAME_PACKING_ARRANGEMENT:
         return decode_nal_sei_frame_packing_arrangement(&s->frame_packing, gb);
-    case HEVC_SEI_TYPE_DISPLAY_ORIENTATION:
+    case SEI_TYPE_DISPLAY_ORIENTATION:
         return decode_nal_sei_display_orientation(&s->display_orientation, gb);
-    case HEVC_SEI_TYPE_PICTURE_TIMING:
+    case SEI_TYPE_PIC_TIMING:
         return decode_nal_sei_pic_timing(s, gb, ps, logctx, size);
-    case HEVC_SEI_TYPE_MASTERING_DISPLAY_INFO:
-        return decode_nal_sei_mastering_display_info(&s->mastering_display, gb);
-    case HEVC_SEI_TYPE_CONTENT_LIGHT_LEVEL_INFO:
-        return decode_nal_sei_content_light_info(&s->content_light, gb);
-    case HEVC_SEI_TYPE_ACTIVE_PARAMETER_SETS:
+    case SEI_TYPE_MASTERING_DISPLAY_COLOUR_VOLUME:
+        return decode_nal_sei_mastering_display_info(&s->mastering_display, gb, size);
+    case SEI_TYPE_CONTENT_LIGHT_LEVEL_INFO:
+        return decode_nal_sei_content_light_info(&s->content_light, gb, size);
+    case SEI_TYPE_ACTIVE_PARAMETER_SETS:
         return decode_nal_sei_active_parameter_sets(s, gb, logctx);
-    case HEVC_SEI_TYPE_USER_DATA_REGISTERED_ITU_T_T35:
+    case SEI_TYPE_USER_DATA_REGISTERED_ITU_T_T35:
         return decode_nal_sei_user_data_registered_itu_t_t35(s, gb, logctx, size);
-    case HEVC_SEI_TYPE_USER_DATA_UNREGISTERED:
+    case SEI_TYPE_USER_DATA_UNREGISTERED:
         return decode_nal_sei_user_data_unregistered(&s->unregistered, gb, size);
-    case HEVC_SEI_TYPE_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
-        return decode_nal_sei_alternative_transfer(&s->alternative_transfer, gb);
-    case HEVC_SEI_TYPE_TIME_CODE:
+    case SEI_TYPE_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
+        return decode_nal_sei_alternative_transfer(&s->alternative_transfer, gb, size);
+    case SEI_TYPE_TIME_CODE:
         return decode_nal_sei_timecode(&s->timecode, gb);
+    case SEI_TYPE_FILM_GRAIN_CHARACTERISTICS:
+        return decode_film_grain_characteristics(&s->film_grain_characteristics, gb);
     default:
         av_log(logctx, AV_LOG_DEBUG, "Skipped PREFIX SEI %d\n", type);
         skip_bits_long(gb, 8 * size);
@@ -433,7 +493,7 @@ static int decode_nal_sei_suffix(GetBitContext *gb, void *logctx, HEVCSEI *s,
                                  int type, int size)
 {
     switch (type) {
-    case HEVC_SEI_TYPE_DECODED_PICTURE_HASH:
+    case SEI_TYPE_DECODED_PICTURE_HASH:
         return decode_nal_sei_decoded_picture_hash(&s->picture_hash, gb);
     default:
         av_log(logctx, AV_LOG_DEBUG, "Skipped SUFFIX SEI %d\n", type);
@@ -463,6 +523,8 @@ static int decode_nal_sei_message(GetBitContext *gb, void *logctx, HEVCSEI *s,
         byte          = get_bits(gb, 8);
         payload_size += byte;
     }
+    if (get_bits_left(gb) < 8LL*payload_size)
+        return AVERROR_INVALIDDATA;
     if (nal_unit_type == HEVC_NAL_SEI_PREFIX) {
         return decode_nal_sei_prefix(gb, logctx, s, ps, payload_type, payload_size);
     } else { /* nal_unit_type == NAL_SEI_SUFFIX */

@@ -30,7 +30,9 @@
 #include "libavutil/crc.h"
 #include "libavutil/float_dsp.h"
 #include "libavutil/libm.h"
+#include "libavutil/mem_internal.h"
 #include "libavutil/thread.h"
+
 #include "avcodec.h"
 #include "get_bits.h"
 #include "internal.h"
@@ -1658,7 +1660,6 @@ static int decode_frame_adu(AVCodecContext *avctx, void *data,
     MPADecodeContext *s = avctx->priv_data;
     uint32_t header;
     int len, ret;
-    int av_unused out_size;
 
     len = buf_size;
 
