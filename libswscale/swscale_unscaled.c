@@ -1806,7 +1806,7 @@ static int planarCopyWrapper(SwsContext *c, const uint8_t *src[],
     const AVPixFmtDescriptor *desc_dst = av_pix_fmt_desc_get(c->dstFormat);
     int plane, i, j;
     for (plane = 0; plane < 4 && dst[plane] != NULL; plane++) {
-        int length = (plane == 0 || plane == 3) ? c->srcW  : AV_CEIL_RSHIFT(c->srcW,   c->chrDstHSubSample);
+        int length = av_image_get_linesize(c->srcFormat, c->srcW, plane);
         int y =      (plane == 0 || plane == 3) ? srcSliceY: AV_CEIL_RSHIFT(srcSliceY, c->chrDstVSubSample);
         int height = (plane == 0 || plane == 3) ? srcSliceH: AV_CEIL_RSHIFT(srcSliceH, c->chrDstVSubSample);
         const uint8_t *srcPtr = src[plane];
@@ -1814,8 +1814,8 @@ static int planarCopyWrapper(SwsContext *c, const uint8_t *src[],
         int shiftonly = plane == 1 || plane == 2 || (!c->srcRange && plane == 0);
 
         // ignore palette for GRAY8
-        if (plane == 1 && !dst[2]) continue;
-        if (!src[plane] || (plane == 1 && !src[2])) {
+        if (c->dstFormat == AV_PIX_FMT_GRAY8 && plane == 1 && !dst[2]) continue;
+        if (!src[plane] || (c->dstFormat == AV_PIX_FMT_GRAY8 && plane == 1 && !src[2])) {
             if (is16BPS(c->dstFormat) || isNBPS(c->dstFormat)) {
                 fillPlane16(dst[plane], dstStride[plane], length, height, y,
                         plane == 3, desc_dst->comp[plane].depth,
