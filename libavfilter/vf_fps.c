@@ -36,6 +36,8 @@
 #include "avfilter.h"
 #include "filters.h"
 #include "internal.h"
+#include "libswscale/swscale.h"
+#include "libswscale/swscale_internal.h"
 
 enum EOFAction {
     EOF_ACTION_ROUND,
@@ -94,6 +96,9 @@ typedef struct FPSContext {
     int frames_out;            ///< number of frames on output
     int dup;                   ///< number of frames duplicated
     int drop;                  ///< number of framed dropped
+
+    struct SwsContext *sws;    ///< software scaler context
+    int tried_w, tried_h, tried_format;
 } FPSContext;
 
 #define OFFSET(x) offsetof(FPSContext, x)
@@ -164,6 +169,11 @@ static av_cold void uninit(AVFilterContext *ctx)
     while (s->frames_count > 0) {
         frame = shift_frame(ctx, s);
         av_frame_free(&frame);
+    }
+
+    if (s->sws) {
+        sws_freeContext(s->sws);
+        s->sws = NULL;
     }
 
     av_log(ctx, AV_LOG_VERBOSE, "%d frames in, %d frames out; %d frames dropped, "
@@ -285,17 +295,59 @@ static int write_frame(AVFilterContext *ctx, FPSContext *s, AVFilterLink *outlin
 
     /* Output a copy of the first buffered frame */
     } else {
-        //frame = av_frame_clone(s->frames[0]);
         frame = av_frame_alloc();
         if (frame) {
             frame->format = s->frames[0]->format;
             frame->width = s->frames[0]->width;
             frame->height = s->frames[0]->height;
 
-            if (av_frame_get_buffer(frame, 32) < 0 ||
-                av_frame_copy(frame, s->frames[0]) < 0 ||
-                av_frame_copy_props(frame, s->frames[0]) < 0)
+            if (av_frame_get_buffer(frame, 0) < 0 ||
+                av_frame_copy_props(frame, s->frames[0]) < 0) {
                 av_frame_free(&frame);
+            } else {
+                if (s->sws &&
+                    (s->sws->srcW      != frame->width  ||
+                     s->sws->srcH      != frame->height ||
+                     s->sws->srcFormat != frame->format ||
+                     s->sws->dstW      != frame->width  ||
+                     s->sws->dstH      != frame->height ||
+                     s->sws->dstFormat != frame->format)) {
+                    sws_freeContext(s->sws);
+                    s->sws = NULL;
+                    s->tried_w = 0;
+                    s->tried_h = 0;
+                    s->tried_format = 0;
+                }
+
+                if (s->sws == NULL && ff_filter_get_nb_threads(ctx) != 1 &&
+                    (s->tried_w != frame->width ||
+                    s->tried_h != frame->height ||
+                    s->tried_format != frame->format)) {
+                    s->sws = sws_alloc_context();
+                    if (s->sws) {
+                        av_opt_set_int(s->sws, "srcw", frame->width, 0);
+                        av_opt_set_int(s->sws, "srch", frame->height, 0);
+                        av_opt_set_int(s->sws, "src_format", frame->format, 0);
+                        av_opt_set_int(s->sws, "dstw", frame->width, 0);
+                        av_opt_set_int(s->sws, "dsth", frame->height, 0);
+                        av_opt_set_int(s->sws, "dst_format", frame->format, 0);
+                        av_opt_set_int(s->sws, "threads", ff_filter_get_nb_threads(ctx), 0);
+                        av_opt_set_int(s->sws, "use_ipp", ff_filter_get_use_ipp(ctx), 0);
+                        if (sws_init_context(s->sws, NULL, NULL) < 0) {
+                            sws_freeContext(s->sws);
+                            s->sws = NULL;
+                        }
+                    }
+                    s->tried_w = frame->width;
+                    s->tried_h = frame->height;
+                    s->tried_format = frame->format;
+                }
+
+                if (s->sws)
+                    sws_scale_frame(s->sws, frame, s->frames[0]);
+                else
+                    av_frame_copy(frame, s->frames[0]);
+            }
         }
 
         if (!frame)
