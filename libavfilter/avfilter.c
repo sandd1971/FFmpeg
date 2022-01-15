@@ -633,6 +633,7 @@ static const AVOption avfilter_options[] = {
         { .i64 = 0 }, 0, INT_MAX, FLAGS },
     { "extra_hw_frames", "Number of extra hardware frames to allocate for the user",
         OFFSET(extra_hw_frames), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, INT_MAX, FLAGS },
+    { "use_ipp", "Use Intel(R) Integrated Performance Primitives", OFFSET(use_ipp), AV_OPT_TYPE_INT, {.i64 = -1}, -1, 1, FLAGS },
     { NULL },
 };
 
@@ -805,6 +806,13 @@ int ff_filter_get_nb_threads(AVFilterContext *ctx)
     if (ctx->nb_threads > 0)
         return FFMIN(ctx->nb_threads, ctx->graph->nb_threads);
     return ctx->graph->nb_threads;
+}
+
+int ff_filter_get_use_ipp(AVFilterContext *ctx)
+{
+	if (ctx->use_ipp >= 0)
+		return ctx->use_ipp > 0 ? 1 : 0;
+	return ctx->graph->use_ipp > 0 ? 1 : 0;
 }
 
 static int process_options(AVFilterContext *ctx, AVDictionary **options,

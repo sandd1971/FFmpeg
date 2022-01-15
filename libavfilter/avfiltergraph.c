@@ -57,6 +57,7 @@ static const AVOption filtergraph_options[] = {
         AV_OPT_TYPE_STRING, {.str = NULL}, 0, 0, F|V },
     {"aresample_swr_opts"   , "default aresample filter options"    , OFFSET(aresample_swr_opts)    ,
         AV_OPT_TYPE_STRING, {.str = NULL}, 0, 0, F|A },
+    { "use_ipp", "Use Intel(R) Integrated Performance Primitives", OFFSET(use_ipp), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, F|V|A },
     { NULL },
 };
 

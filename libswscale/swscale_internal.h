@@ -340,6 +340,7 @@ typedef struct SwsContext {
     int vChrDrop;                 ///< Binary logarithm of extra vertical subsampling factor in source image chroma planes specified by user.
     int sliceDir;                 ///< Direction that slices are fed to the scaler (1 = top-to-bottom, -1 = bottom-to-top).
     int nb_threads;               ///< Number of threads used for scaling
+    int use_ipp;                  ///< Use Intel(R) Integrated Performance Primitives
     double param[2];              ///< Input parameters for scaling algorithms that need them.
 
     AVFrame *frame_src;
@@ -953,6 +954,7 @@ void ff_get_unscaled_swscale(SwsContext *c);
 void ff_get_unscaled_swscale_ppc(SwsContext *c);
 void ff_get_unscaled_swscale_arm(SwsContext *c);
 void ff_get_unscaled_swscale_aarch64(SwsContext *c);
+void ff_get_unscaled_swscale_ipp(SwsContext *c);
 
 void ff_sws_init_scale(SwsContext *c);
 

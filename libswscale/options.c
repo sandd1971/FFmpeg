@@ -84,6 +84,8 @@ static const AVOption swscale_options[] = {
     { "threads",         "number of threads",             OFFSET(nb_threads),   AV_OPT_TYPE_INT, {.i64 = 1 }, 0, INT_MAX, VE, "threads" },
         { "auto",        NULL,                            0,                  AV_OPT_TYPE_CONST, {.i64 = 0 },    .flags = VE, "threads" },
 
+    { "use_ipp",         "Use Intel(R) Integrated Performance Primitives", OFFSET(use_ipp), AV_OPT_TYPE_INT,   {.i64 = -1}, -1, 1, VE },
+
     { NULL }
 };
 

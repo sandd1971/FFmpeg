@@ -486,6 +486,11 @@ struct AVFilterContext {
      * configured.
      */
     int extra_hw_frames;
+
+    /**
+     * Use Intel(R) Integrated Performance Primitives Libraries
+     */
+    int use_ipp;
 };
 
 /**
@@ -885,6 +890,11 @@ typedef struct AVFilterGraph {
      * default) means that the number of threads is determined automatically.
      */
     int nb_threads;
+
+    /**
+     * Use Intel(R) Integrated Performance Primitives Libraries
+     */
+    int use_ipp;
 
     /**
      * Opaque object for libavfilter internal use.

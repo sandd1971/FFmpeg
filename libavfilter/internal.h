@@ -382,6 +382,11 @@ int ff_filter_graph_run_once(AVFilterGraph *graph);
 int ff_filter_get_nb_threads(AVFilterContext *ctx) av_pure;
 
 /**
+ * Get usage of IPP for current filter instance.
+ */
+int ff_filter_get_use_ipp(AVFilterContext *ctx) av_pure;
+
+/**
  * Generic processing of user supplied commands that are set
  * in the same way as the filter options.
  * NOTE: 'enable' option is handled separately, and not by

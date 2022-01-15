@@ -18,6 +18,7 @@ OBJS = alphablend.o                                     \
        utils.o                                          \
        yuv2rgb.o                                        \
        vscale.o                                         \
+       swscale_unscaled_ipp.o                           \
 
 # Objects duplicated from other libraries for shared builds
 SHLIBOBJS                    += log2_tab.o
