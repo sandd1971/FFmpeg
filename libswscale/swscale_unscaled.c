@@ -34,6 +34,7 @@
 #include "libavutil/pixdesc.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avconfig.h"
+#include "libavutil/imgutils.h"
 
 DECLARE_ALIGNED(8, static const uint8_t, dithers)[8][8][8]={
 {
