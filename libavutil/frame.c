@@ -27,6 +27,7 @@
 #include "mem.h"
 #include "samplefmt.h"
 #include "hwcontext.h"
+#include "libavcodec/internal.h"
 
 #define CHECK_CHANNELS_CONSISTENCY(frame) \
     av_assert2(!(frame)->channel_layout || \
@@ -119,7 +120,7 @@ static int get_video_buffer(AVFrame *frame, int align)
 {
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(frame->format);
     int ret, i, padded_height, total_size;
-    int plane_padding = FFMAX(16 + 16/*STRIDE_ALIGN*/, align);
+    int plane_padding = FFMAX(STRIDE_ALIGN, align);
     ptrdiff_t linesizes[4];
     size_t sizes[4];
 
@@ -131,7 +132,7 @@ static int get_video_buffer(AVFrame *frame, int align)
 
     if (!frame->linesize[0]) {
         if (align <= 0)
-            align = 32; /* STRIDE_ALIGN. Should be av_cpu_max_align() */
+            align = STRIDE_ALIGN; /* Should be av_cpu_max_align() */
 
         for(i=1; i<=align; i+=i) {
             ret = av_image_fill_linesizes(frame->linesize, frame->format,
