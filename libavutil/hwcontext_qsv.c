@@ -775,7 +775,7 @@ static int qsv_frames_derive_from(AVHWFramesContext *dst_ctx,
     case AV_HWDEVICE_TYPE_D3D11VA:
         {
             AVD3D11VAFramesContext *dst_hwctx = dst_ctx->hwctx;
-            mfxHDLPair *pair = (mfxHDLPair*)src_hwctx->surfaces[i].Data.MemId;
+            mfxHDLPair *pair = (mfxHDLPair*)src_hwctx->surfaces[0].Data.MemId;
             dst_hwctx->texture = (ID3D11Texture2D*)pair->first;
             if (src_hwctx->frame_type & MFX_MEMTYPE_SHARED_RESOURCE)
                 dst_hwctx->MiscFlags = D3D11_RESOURCE_MISC_SHARED;
