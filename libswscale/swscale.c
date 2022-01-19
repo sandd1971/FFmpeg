@@ -1197,6 +1197,32 @@ int sws_scale_frame(struct SwsContext *c, AVFrame *dst, const AVFrame *src)
     return ret;
 }
 
+int sws_scale_picture(struct SwsContext *c, uint8_t *const dst[], const int dstStride[],
+                      const uint8_t *const src[], const int srcStride[])
+{
+    int ret;
+
+    c->frame_src->width = c->srcW;
+    c->frame_src->height = c->srcH;
+    c->frame_src->format = c->srcFormat;
+    c->frame_dst->width = c->dstW;
+    c->frame_dst->height = c->dstH;
+    c->frame_dst->format = c->dstFormat;
+    for (int i = 0; i < 4; i++) {
+        c->frame_src->data[i] = (uint8_t*)src[i];
+        c->frame_src->linesize[i] = srcStride[i];
+        c->frame_dst->data[i] = (uint8_t*)dst[i];
+        c->frame_dst->linesize[i] = dstStride[i];
+    }
+
+    ret = sws_send_slice(c, 0, c->srcH);
+    if (ret >= 0)
+        ret = sws_receive_slice(c, 0, c->dstH);
+    c->src_ranges.nb_ranges = 0;
+
+    return ret;
+}
+
 /**
  * swscale wrapper, so we don't need to export the SwsContext.
  * Assumes planar YUV to be in YUV order instead of YVU.

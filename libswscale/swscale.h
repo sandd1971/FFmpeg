@@ -235,6 +235,8 @@ int sws_scale(struct SwsContext *c, const uint8_t *const srcSlice[],
  * @return 0 on success, a negative AVERROR code on failure
  */
 int sws_scale_frame(struct SwsContext *c, AVFrame *dst, const AVFrame *src);
+int sws_scale_picture(struct SwsContext *c, uint8_t *const dst[], const int dstStride[],
+                      const uint8_t *const src[], const int srcStride[]);
 
 /**
  * Initialize the scaling process for a given pair of source/destination frames.
@@ -383,8 +385,8 @@ void sws_freeFilter(SwsFilter *filter);
 struct SwsContext *sws_getCachedContext(struct SwsContext *context,
                                         int srcW, int srcH, enum AVPixelFormat srcFormat,
                                         int dstW, int dstH, enum AVPixelFormat dstFormat,
-                                        int flags, SwsFilter *srcFilter,
-                                        SwsFilter *dstFilter, const double *param);
+                                        int flags, int threads, int useIPP,
+                                        SwsFilter *srcFilter, SwsFilter *dstFilter, const double *param);
 
 /**
  * Convert an 8-bit paletted frame into a frame with a color depth of 32 bits.

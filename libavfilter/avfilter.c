@@ -630,7 +630,7 @@ static const AVOption avfilter_options[] = {
         { "slice", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AVFILTER_THREAD_SLICE }, .flags = FLAGS, .unit = "thread_type" },
     { "enable", "set enable expression", OFFSET(enable_str), AV_OPT_TYPE_STRING, {.str=NULL}, .flags = TFLAGS },
     { "threads", "Allowed number of threads", OFFSET(nb_threads), AV_OPT_TYPE_INT,
-        { .i64 = 0 }, 0, INT_MAX, FLAGS },
+        { .i64 = 0 }, -1, INT_MAX, FLAGS },
     { "extra_hw_frames", "Number of extra hardware frames to allocate for the user",
         OFFSET(extra_hw_frames), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, INT_MAX, FLAGS },
     { "use_ipp", "Use Intel(R) Integrated Performance Primitives", OFFSET(use_ipp), AV_OPT_TYPE_INT, {.i64 = -1}, -1, 1, FLAGS },
@@ -804,8 +804,16 @@ void avfilter_free(AVFilterContext *filter)
 int ff_filter_get_nb_threads(AVFilterContext *ctx)
 {
     if (ctx->nb_threads > 0)
-        return FFMIN(ctx->nb_threads, ctx->graph->nb_threads);
-    return ctx->graph->nb_threads;
+        return ctx->nb_threads;
+    else if (ctx->nb_threads == 0 && ctx->graph->nb_threads > 0)
+        return ctx->graph->nb_threads;
+
+    int nb_cpus = av_cpu_count();
+    // use number of cores + 1 as thread count if there is more than one
+    if (nb_cpus > 1)
+        return nb_cpus + 1;
+    else
+        return 1;
 }
 
 int ff_filter_get_use_ipp(AVFilterContext *ctx)

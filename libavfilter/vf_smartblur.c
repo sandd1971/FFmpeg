@@ -122,7 +122,7 @@ static const enum AVPixelFormat pix_fmts[] = {
     AV_PIX_FMT_NONE
 };
 
-static int alloc_sws_context(FilterParam *f, int width, int height, unsigned int flags)
+static int alloc_sws_context(AVFilterContext *ctx, FilterParam *f, int width, int height, unsigned int flags)
 {
     SwsVector *vec;
     SwsFilter sws_filter;
@@ -139,7 +139,10 @@ static int alloc_sws_context(FilterParam *f, int width, int height, unsigned int
     f->filter_context = sws_getCachedContext(NULL,
                                              width, height, AV_PIX_FMT_GRAY8,
                                              width, height, AV_PIX_FMT_GRAY8,
-                                             flags, &sws_filter, NULL, NULL);
+                                             flags,
+                                             ff_filter_get_nb_threads(ctx),
+                                             ff_filter_get_use_ipp(ctx),
+                                             &sws_filter, NULL, NULL);
 
     sws_freeVec(vec);
 
@@ -157,8 +160,8 @@ static int config_props(AVFilterLink *inlink)
     s->hsub = desc->log2_chroma_w;
     s->vsub = desc->log2_chroma_h;
 
-    alloc_sws_context(&s->luma, inlink->w, inlink->h, s->sws_flags);
-    alloc_sws_context(&s->chroma,
+    alloc_sws_context(inlink->dst, &s->luma, inlink->w, inlink->h, s->sws_flags);
+    alloc_sws_context(inlink->dst, &s->chroma,
                       AV_CEIL_RSHIFT(inlink->w, s->hsub),
                       AV_CEIL_RSHIFT(inlink->h, s->vsub),
                       s->sws_flags);
@@ -180,8 +183,8 @@ static void blur(uint8_t       *dst, const int dst_linesize,
     int src_linesize_array[4] = {src_linesize};
     int dst_linesize_array[4] = {dst_linesize};
 
-    sws_scale(filter_context, src_array, src_linesize_array,
-              0, h, dst_array, dst_linesize_array);
+    sws_scale_picture(filter_context, dst_array, dst_linesize_array,
+              src_array, src_linesize_array);
 
     if (threshold > 0) {
         for (y = 0; y < h; ++y) {

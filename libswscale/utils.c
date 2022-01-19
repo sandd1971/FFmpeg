@@ -2459,6 +2459,7 @@ struct SwsContext *sws_getCachedContext(struct SwsContext *context, int srcW,
                                         int srcH, enum AVPixelFormat srcFormat,
                                         int dstW, int dstH,
                                         enum AVPixelFormat dstFormat, int flags,
+                                        int threads, int useIPP,
                                         SwsFilter *srcFilter,
                                         SwsFilter *dstFilter,
                                         const double *param)
@@ -2479,6 +2480,8 @@ struct SwsContext *sws_getCachedContext(struct SwsContext *context, int srcW,
          context->dstH      != dstH      ||
          context->dstFormat != dstFormat ||
          context->flags     != flags     ||
+         context->nb_threads!= threads   ||
+         context->use_ipp   != useIPP    ||
          context->param[0]  != param[0]  ||
          context->param[1]  != param[1])) {
 
@@ -2500,6 +2503,8 @@ struct SwsContext *sws_getCachedContext(struct SwsContext *context, int srcW,
         context->dstH      = dstH;
         context->dstFormat = dstFormat;
         context->flags     = flags;
+        context->nb_threads= threads;
+        context->use_ipp   = useIPP;
         context->param[0]  = param[0];
         context->param[1]  = param[1];
 

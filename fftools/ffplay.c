@@ -916,7 +916,7 @@ static int upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext *
             /* This should only happen if we are not using avfilter... */
             *img_convert_ctx = sws_getCachedContext(*img_convert_ctx,
                 frame->width, frame->height, frame->format, frame->width, frame->height,
-                AV_PIX_FMT_BGRA, sws_flags, NULL, NULL, NULL);
+                AV_PIX_FMT_BGRA, sws_flags, filter_nbthreads, filter_use_ipp, NULL, NULL, NULL);
             if (*img_convert_ctx != NULL) {
                 uint8_t *pixels[4];
                 int pitch[4];
@@ -1005,6 +1005,7 @@ static void video_image_display(VideoState *is)
                         is->sub_convert_ctx = sws_getCachedContext(is->sub_convert_ctx,
                             sub_rect->w, sub_rect->h, AV_PIX_FMT_PAL8,
                             sub_rect->w, sub_rect->h, AV_PIX_FMT_BGRA,
+                            filter_nbthreads, filter_use_ipp,
                             0, NULL, NULL, NULL);
                         if (!is->sub_convert_ctx) {
                             av_log(NULL, AV_LOG_FATAL, "Cannot initialize the conversion context\n");
