@@ -319,7 +319,7 @@ static int write_frame(AVFilterContext *ctx, FPSContext *s, AVFilterLink *outlin
                     s->tried_format = 0;
                 }
 
-                if (s->sws == NULL && ff_filter_get_nb_threads(ctx) != 1 &&
+                if (s->sws == NULL &&
                     (s->tried_w != frame->width ||
                     s->tried_h != frame->height ||
                     s->tried_format != frame->format)) {
