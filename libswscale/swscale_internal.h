@@ -553,6 +553,20 @@ typedef struct SwsContext {
     int16_t xyz2rgb_matrix[3][4];
     int16_t rgb2xyz_matrix[3][4];
 
+    // IPP related stuff
+    int ippConvertStride[4];
+    uint8_t *ippConvert[4];
+    int interlSrcStride[2];
+    uint8_t *interlSrc[2];
+    enum AVPixelFormat cvtSrcFmt; ///< Convert      pixel format.
+    enum AVPixelFormat cvtDstFmt; ///< Convert      pixel format.
+    int cvtSrcBpc;
+    int cvtDstBpc;
+    int chrCvtSrcHSubSample;      ///< Binary logarithm of horizontal subsampling factor between luma/alpha and chroma planes in source      image.
+    int chrCvtSrcVSubSample;      ///< Binary logarithm of vertical   subsampling factor between luma/alpha and chroma planes in source      image.
+    int chrCvtDstHSubSample;      ///< Binary logarithm of horizontal subsampling factor between luma/alpha and chroma planes in destination image.
+    int chrCvtDstVSubSample;      ///< Binary logarithm of vertical   subsampling factor between luma/alpha and chroma planes in destination image.
+
     /* function pointers for swscale() */
     yuv2planar1_fn yuv2plane1;
     yuv2planarX_fn yuv2planeX;

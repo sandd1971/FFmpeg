@@ -109,6 +109,13 @@ DECLARE_ALIGNED(8, extern const uint64_t, ff_bgr2UVOffset);
 #define RENAME(a) a ## _sse2
 #include "rgb2rgb_template.c"
 
+//SSE4 versions
+#undef RENAME
+#undef COMPILE_TEMPLATE_SSE4
+#define COMPILE_TEMPLATE_SSE4 1
+#define RENAME(a) a ## _sse4
+#include "rgb2rgb_template.c"
+
 //AVX versions
 #undef RENAME
 #undef COMPILE_TEMPLATE_AVX
@@ -120,10 +127,12 @@ DECLARE_ALIGNED(8, extern const uint64_t, ff_bgr2UVOffset);
 #undef RENAME
 #undef COMPILE_TEMPLATE_MMXEXT
 #undef COMPILE_TEMPLATE_SSE2
+#undef COMPILE_TEMPLATE_SSE4
 #undef COMPILE_TEMPLATE_AVX
 #undef COMPILE_TEMPLATE_AMD3DNOW
 #define COMPILE_TEMPLATE_MMXEXT 0
 #define COMPILE_TEMPLATE_SSE2 0
+#define COMPILE_TEMPLATE_SSE4 0
 #define COMPILE_TEMPLATE_AVX 0
 #define COMPILE_TEMPLATE_AMD3DNOW 1
 #define RENAME(a) a ## _3dnow
@@ -173,6 +182,8 @@ av_cold void rgb2rgb_init_x86(void)
         rgb2rgb_init_mmxext();
     if (INLINE_SSE2(cpu_flags))
         rgb2rgb_init_sse2();
+    if (INLINE_SSE4(cpu_flags))
+        rgb2rgb_init_sse4();
     if (INLINE_AVX(cpu_flags))
         rgb2rgb_init_avx();
 #endif /* HAVE_INLINE_ASM */

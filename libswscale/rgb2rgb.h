@@ -142,6 +142,14 @@ extern void (*deinterleaveBytes)(const uint8_t *src, uint8_t *dst1, uint8_t *dst
                                  int width, int height, int srcStride,
                                  int dst1Stride, int dst2Stride);
 
+extern void (*interleaveWords)(const uint8_t *src1, const uint8_t *src2, uint8_t *dst,
+                               int width, int height, int src1Stride,
+                               int src2Stride, int dstStride);
+
+extern void (*deinterleaveWords)(const uint8_t *src, uint8_t *dst1, uint8_t *dst2,
+                                 int width, int height, int srcStride,
+                                 int dst1Stride, int dst2Stride);
+
 extern void (*vu9_to_vu12)(const uint8_t *src1, const uint8_t *src2,
                            uint8_t *dst1, uint8_t *dst2,
                            int width, int height,

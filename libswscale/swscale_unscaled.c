@@ -128,16 +128,76 @@ static void copyPlane(const uint8_t *src, int srcStride,
                       uint8_t *dst, int dstStride)
 {
     dst += dstStride * srcSliceY;
-    if (dstStride == srcStride && srcStride > 0) {
-        memcpy(dst, src, srcSliceH * dstStride);
+    int i;
+    for (i = 0; i < srcSliceH; i++) {
+        memcpy(dst, src, width);
+        src += srcStride;
+        dst += dstStride;
+    }
+}
+
+static void slicedCopyPlane(
+    const uint8_t *src, int src_linesize,
+    uint8_t *dst, int dst_linesize,
+    int bytewidth, int height)
+{
+    if (!dst || !src)
+        return;
+    av_assert0(FFABS(src_linesize) >= bytewidth);
+    av_assert0(FFABS(dst_linesize) >= bytewidth);
+    for (; height > 0; height--) {
+        memcpy(dst, src, bytewidth);
+        dst += dst_linesize;
+        src += src_linesize;
+    }
+}
+
+static int slicedCopyWrapper(SwsContext *c,
+    const uint8_t *src_data[], int src_linesizes[],
+    int srcSliceY, int srcSliceH,
+    uint8_t *dst_data[], int dst_linesizes[])
+{
+    enum AVPixelFormat pix_fmt = c->dstFormat;
+    if (c->srcFormat == AV_PIX_FMT_YUV420P || c->dstFormat == AV_PIX_FMT_YUV420P)
+        pix_fmt = AV_PIX_FMT_YUV420P;
+    int width = c->dstW;
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
+
+    if (!desc || desc->flags & AV_PIX_FMT_FLAG_HWACCEL)
+        return AVERROR(EINVAL);
+
+    if (desc->flags & AV_PIX_FMT_FLAG_PAL) {
+        slicedCopyPlane(src_data[0], src_linesizes[0],
+            dst_data[0] + dst_linesizes[0] * srcSliceY, dst_linesizes[0],
+            width, srcSliceH);
+        /* copy the palette */
+        if ((desc->flags & AV_PIX_FMT_FLAG_PAL) || (dst_data[1] && src_data[1]))
+            memcpy(dst_data[1], src_data[1], 4 * 256);
     } else {
-        int i;
-        for (i = 0; i < srcSliceH; i++) {
-            memcpy(dst, src, width);
-            src += srcStride;
-            dst += dstStride;
+        int i, planes_nb = 0;
+
+        for (i = 0; i < desc->nb_components; i++)
+            planes_nb = FFMAX(planes_nb, desc->comp[i].plane + 1);
+
+        for (i = 0; i < planes_nb; i++) {
+            int y = srcSliceY;
+            int h = srcSliceH;
+            int bwidth = av_image_get_linesize(pix_fmt, width, i);
+            if (bwidth < 0) {
+                av_log(NULL, AV_LOG_ERROR, "av_image_get_linesize failed\n");
+                return AVERROR(EINVAL);
+            }
+            if (i == 1 || i == 2) {
+                y = AV_CEIL_RSHIFT(srcSliceY, desc->log2_chroma_h);
+                h = AV_CEIL_RSHIFT(srcSliceH, desc->log2_chroma_h);
+            }
+            slicedCopyPlane(src_data[i], src_linesizes[i],
+                dst_data[i] + dst_linesizes[i] * y, dst_linesizes[i],
+                bwidth, h);
         }
     }
+
+    return srcSliceH;
 }
 
 static int planarToNv12Wrapper(SwsContext *c, const uint8_t *src[],
@@ -1807,7 +1867,7 @@ static int planarCopyWrapper(SwsContext *c, const uint8_t *src[],
     const AVPixFmtDescriptor *desc_dst = av_pix_fmt_desc_get(c->dstFormat);
     int plane, i, j;
     for (plane = 0; plane < 4 && dst[plane] != NULL; plane++) {
-        int length = av_image_get_linesize(c->srcFormat, c->srcW, plane);
+        int length = (plane == 0 || plane == 3) ? c->srcW  : AV_CEIL_RSHIFT(c->srcW,   c->chrDstHSubSample);
         int y =      (plane == 0 || plane == 3) ? srcSliceY: AV_CEIL_RSHIFT(srcSliceY, c->chrDstVSubSample);
         int height = (plane == 0 || plane == 3) ? srcSliceH: AV_CEIL_RSHIFT(srcSliceH, c->chrDstVSubSample);
         const uint8_t *srcPtr = src[plane];
@@ -2206,10 +2266,7 @@ void ff_get_unscaled_swscale(SwsContext *c)
 
 #define isPlanarGray(x) (isGray(x) && (x) != AV_PIX_FMT_YA8 && (x) != AV_PIX_FMT_YA16LE && (x) != AV_PIX_FMT_YA16BE)
     /* simple copy */
-    if ( srcFormat == dstFormat ||
-        (srcFormat == AV_PIX_FMT_YUVA420P && dstFormat == AV_PIX_FMT_YUV420P) ||
-        (srcFormat == AV_PIX_FMT_YUV420P && dstFormat == AV_PIX_FMT_YUVA420P) ||
-        (isFloat(srcFormat) == isFloat(dstFormat)) && ((isPlanarYUV(srcFormat) && isPlanarGray(dstFormat)) ||
+    if ((isFloat(srcFormat) == isFloat(dstFormat)) && ((isPlanarYUV(srcFormat) && isPlanarGray(dstFormat)) ||
         (isPlanarYUV(dstFormat) && isPlanarGray(srcFormat)) ||
         (isPlanarGray(dstFormat) && isPlanarGray(srcFormat)) ||
         (isPlanarYUV(srcFormat) && isPlanarYUV(dstFormat) &&
@@ -2222,6 +2279,11 @@ void ff_get_unscaled_swscale(SwsContext *c)
         else /* Planar YUV or gray */
             c->convert_unscaled = planarCopyWrapper;
     }
+
+    if (srcFormat == dstFormat ||
+        (srcFormat == AV_PIX_FMT_YUVA420P && dstFormat == AV_PIX_FMT_YUV420P) ||
+        (srcFormat == AV_PIX_FMT_YUV420P && dstFormat == AV_PIX_FMT_YUVA420P))
+        c->convert_unscaled = slicedCopyWrapper;
 
     if (ARCH_PPC)
         ff_get_unscaled_swscale_ppc(c);

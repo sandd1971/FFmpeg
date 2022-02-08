@@ -2443,6 +2443,8 @@ void sws_freeContext(SwsContext *c)
     memset(c->cascaded_context, 0, sizeof(c->cascaded_context));
     av_freep(&c->cascaded_tmp[0]);
     av_freep(&c->cascaded1_tmp[0]);
+    av_freep(&c->ippConvert[0]);
+    av_freep(&c->interlSrc[0]);
 
     av_freep(&c->gamma);
     av_freep(&c->inv_gamma);

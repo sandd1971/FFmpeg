@@ -1896,6 +1896,82 @@ static void RENAME(interleaveBytes)(const uint8_t *src1, const uint8_t *src2, ui
             ::: "memory"
             );
 }
+static void RENAME(interleaveWords)(const uint8_t *src1, const uint8_t *src2, uint8_t *dest,
+                                    int width, int height, int src1Stride,
+                                    int src2Stride, int dstStride)
+{
+    int h;
+
+    width *= 2;
+    for (h=0; h < height; h++) {
+        int w;
+
+        if (width >= 16) {
+#if COMPILE_TEMPLATE_SSE2
+            if (!((((intptr_t)src1) | ((intptr_t)src2) | ((intptr_t)dest))&15)) {
+        __asm__(
+            "xor              %%"FF_REG_a", %%"FF_REG_a"  \n\t"
+            "1:                                     \n\t"
+            PREFETCH" 64(%1, %%"FF_REG_a")          \n\t"
+            PREFETCH" 64(%2, %%"FF_REG_a")          \n\t"
+            "movdqa  (%1, %%"FF_REG_a"), %%xmm0     \n\t"
+            "movdqa  (%1, %%"FF_REG_a"), %%xmm1     \n\t"
+            "movdqa  (%2, %%"FF_REG_a"), %%xmm2     \n\t"
+            "punpcklwd           %%xmm2, %%xmm0     \n\t"
+            "punpckhwd           %%xmm2, %%xmm1     \n\t"
+            "movntdq             %%xmm0,   (%0, %%"FF_REG_a", 2) \n\t"
+            "movntdq             %%xmm1, 16(%0, %%"FF_REG_a", 2) \n\t"
+            "add                    $16, %%"FF_REG_a"            \n\t"
+            "cmp                     %3, %%"FF_REG_a"            \n\t"
+            " jb                     1b             \n\t"
+            ::"r"(dest), "r"(src1), "r"(src2), "r" ((x86_reg)width-15)
+            : "memory", XMM_CLOBBERS("xmm0", "xmm1", "xmm2",) "%"FF_REG_a
+        );
+            } else
+#endif
+        __asm__(
+            "xor %%"FF_REG_a", %%"FF_REG_a"         \n\t"
+            "1:                                     \n\t"
+            PREFETCH" 64(%1, %%"FF_REG_a")          \n\t"
+            PREFETCH" 64(%2, %%"FF_REG_a")          \n\t"
+            "movq    (%1, %%"FF_REG_a"), %%mm0      \n\t"
+            "movq   8(%1, %%"FF_REG_a"), %%mm2      \n\t"
+            "movq                 %%mm0, %%mm1      \n\t"
+            "movq                 %%mm2, %%mm3      \n\t"
+            "movq    (%2, %%"FF_REG_a"), %%mm4      \n\t"
+            "movq   8(%2, %%"FF_REG_a"), %%mm5      \n\t"
+            "punpcklwd            %%mm4, %%mm0      \n\t"
+            "punpckhwd            %%mm4, %%mm1      \n\t"
+            "punpcklwd            %%mm5, %%mm2      \n\t"
+            "punpckhwd            %%mm5, %%mm3      \n\t"
+            MOVNTQ"               %%mm0,   (%0, %%"FF_REG_a", 2) \n\t"
+            MOVNTQ"               %%mm1,  8(%0, %%"FF_REG_a", 2) \n\t"
+            MOVNTQ"               %%mm2, 16(%0, %%"FF_REG_a", 2) \n\t"
+            MOVNTQ"               %%mm3, 24(%0, %%"FF_REG_a", 2) \n\t"
+            "add                    $16, %%"FF_REG_a"            \n\t"
+            "cmp                     %3, %%"FF_REG_a"            \n\t"
+            " jb                     1b                          \n\t"
+            ::"r"(dest), "r"(src1), "r"(src2), "r" ((x86_reg)width-15)
+            : "memory", "%"FF_REG_a
+        );
+
+        }
+        for (w= ((width/2)&(~15)); w < width / 2; w++) {
+            dest[4*w+0] = src1[2*w+0];
+            dest[4*w+1] = src1[2*w+1];
+            dest[4*w+2] = src2[2*w+0];
+            dest[4*w+3] = src2[2*w+1];
+        }
+        dest += dstStride;
+        src1 += src1Stride;
+        src2 += src2Stride;
+    }
+    __asm__(
+            EMMS"       \n\t"
+            SFENCE"     \n\t"
+            ::: "memory"
+            );
+}
 #endif /* !COMPILE_TEMPLATE_AMD3DNOW && !COMPILE_TEMPLATE_AVX */
 
 #if !COMPILE_TEMPLATE_AVX || HAVE_AVX_EXTERNAL
@@ -1920,6 +1996,38 @@ static void RENAME(deinterleaveBytes)(const uint8_t *src, uint8_t *dst1, uint8_t
     }
     __asm__(
 #if !COMPILE_TEMPLATE_SSE2
+            EMMS"       \n\t"
+#endif
+            SFENCE"     \n\t"
+            ::: "memory"
+            );
+}
+#endif /* !COMPILE_TEMPLATE_AMD3DNOW */
+#endif /* !COMPILE_TEMPLATE_AVX || HAVE_AVX_EXTERNAL */
+
+#if !COMPILE_TEMPLATE_AVX || HAVE_AVX_EXTERNAL
+#if !COMPILE_TEMPLATE_AMD3DNOW && (ARCH_X86_32 || COMPILE_TEMPLATE_SSE4) && COMPILE_TEMPLATE_MMXEXT == COMPILE_TEMPLATE_SSE4 && HAVE_X86ASM
+void RENAME(ff_p0xxToUV)(uint8_t *dstU, uint8_t *dstV,
+                         const uint8_t *unused,
+                         const uint8_t *src1,
+                         const uint8_t *src2,
+                         int w,
+                         uint32_t *unused2);
+static void RENAME(deinterleaveWords)(const uint8_t *src, uint8_t *dst1, uint8_t *dst2,
+                                      int width, int height, int srcStride,
+                                      int dst1Stride, int dst2Stride)
+{
+    int h;
+
+    width *= 2;
+    for (h = 0; h < height; h++) {
+        RENAME(ff_p0xxToUV)(dst1, dst2, NULL, src, NULL, width, NULL);
+        src  += srcStride;
+        dst1 += dst1Stride;
+        dst2 += dst2Stride;
+    }
+    __asm__(
+#if !COMPILE_TEMPLATE_SSE4
             EMMS"       \n\t"
 #endif
             SFENCE"     \n\t"
@@ -2540,6 +2648,15 @@ static av_cold void RENAME(rgb2rgb_init)(void)
 #if !COMPILE_TEMPLATE_AVX || HAVE_AVX_EXTERNAL
 #if !COMPILE_TEMPLATE_AMD3DNOW && (ARCH_X86_32 || COMPILE_TEMPLATE_SSE2) && COMPILE_TEMPLATE_MMXEXT == COMPILE_TEMPLATE_SSE2 && HAVE_X86ASM
     deinterleaveBytes  = RENAME(deinterleaveBytes);
+#endif
+#endif
+
+#if !COMPILE_TEMPLATE_AMD3DNOW && !COMPILE_TEMPLATE_AVX
+    interleaveWords    = RENAME(interleaveWords);
+#endif /* !COMPILE_TEMPLATE_AMD3DNOW && !COMPILE_TEMPLATE_AVX */
+#if !COMPILE_TEMPLATE_AVX || HAVE_AVX_EXTERNAL
+#if !COMPILE_TEMPLATE_AMD3DNOW && (ARCH_X86_32 || COMPILE_TEMPLATE_SSE4) && COMPILE_TEMPLATE_MMXEXT == COMPILE_TEMPLATE_SSE4 && HAVE_X86ASM
+    deinterleaveWords = RENAME(deinterleaveWords);
 #endif
 #endif
 }

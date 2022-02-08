@@ -711,6 +711,53 @@ cglobal %2ToUV, 4, 5, %1, dstU, dstV, unused, src, w
 %endif ; mmsize == 8/16
 %endmacro
 
+; %1 = a (aligned) or u (unaligned)
+%macro LOOP_P0XX_TO_UV 2
+.loop_%1:
+    mov%1          m0, [srcq+wq*2]        ; (word)  { U0, V0, U1, V1, ... }
+    mov%1          m1, [srcq+wq*2+mmsize] ; (word)  { U4, V4, U5, V5, ... }
+    pand           m2, m0, m5             ; (dword) { U0, U1, U2, U3 }
+    pand           m3, m1, m5             ; (dword) { U4, U5, U6, U7 }
+    psrld          m0, 16                 ; (dword) { V0, V1, V2, V3 }
+    psrld          m1, 16                 ; (dword) { V4, V5, V6, V7 }
+    packusdw       m2, m3                 ; (word)  { U0, ..., U7 }
+    packusdw       m0, m1                 ; (word)  { V0, ..., V7 }
+    mova   [dstUq+wq], m2
+    mova   [dstVq+wq], m0
+    add            wq, mmsize
+    jl .loop_%1
+    REP_RET
+%endmacro
+
+; %1 = nr. of XMM registers
+%macro P0XX_TO_UV_FN 2
+cglobal %2ToUV, 4, 5, %1, dstU, dstV, unused, src, w
+%if ARCH_X86_64
+    movsxd         wq, dword r5m
+%else ; x86-32
+    mov            wq, r5m
+%endif
+    add         dstUq, wq
+    add         dstVq, wq
+%if mmsize == 16
+    test         srcq, 15
+%endif
+    lea          srcq, [srcq+wq*2]
+    pcmpeqb        m5, m5                 ; (word)  { 0xffff } x 8
+    psrld          m5, 16                 ; (dword) { 0x0000ffff } x 4
+%if mmsize == 16
+    jnz .loop_u_start
+    neg            wq
+    LOOP_P0XX_TO_UV a, %2
+.loop_u_start:
+    neg            wq
+    LOOP_P0XX_TO_UV u, %2
+%else ; mmsize == 8
+    neg            wq
+    LOOP_P0XX_TO_UV a, %2
+%endif ; mmsize == 8/16
+%endmacro
+
 %if ARCH_X86_32
 INIT_MMX mmx
 YUYV_TO_Y_FN  0, yuyv
@@ -729,6 +776,15 @@ YUYV_TO_UV_FN 3, uyvy
 NVXX_TO_UV_FN 5, nv12
 NVXX_TO_UV_FN 5, nv21
 
+INIT_XMM sse4
+YUYV_TO_Y_FN  3, yuyv
+YUYV_TO_Y_FN  2, uyvy
+YUYV_TO_UV_FN 3, yuyv
+YUYV_TO_UV_FN 3, uyvy
+NVXX_TO_UV_FN 5, nv12
+NVXX_TO_UV_FN 5, nv21
+P0XX_TO_UV_FN 5, p0xx
+
 %if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 ; in theory, we could write a yuy2-to-y using vpand (i.e. AVX), but
@@ -737,4 +793,5 @@ YUYV_TO_UV_FN 3, yuyv
 YUYV_TO_UV_FN 3, uyvy, 1
 NVXX_TO_UV_FN 5, nv12
 NVXX_TO_UV_FN 5, nv21
+P0XX_TO_UV_FN 5, p0xx
 %endif

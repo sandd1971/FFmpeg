@@ -743,6 +743,46 @@ static void deinterleaveBytes_c(const uint8_t *src, uint8_t *dst1, uint8_t *dst2
     }
 }
 
+static void interleaveWords_c(const uint8_t *src1, const uint8_t *src2,
+                              uint8_t *dest, int width, int height,
+                              int src1Stride, int src2Stride, int dstStride)
+{
+    int h;
+
+    for (h = 0; h < height; h++) {
+        int w;
+        for (w = 0; w < width; w++) {
+            dest[4 * w + 0] = src1[2 * w + 0];
+            dest[4 * w + 1] = src1[2 * w + 1];
+            dest[4 * w + 2] = src2[2 * w + 0];
+            dest[4 * w + 3] = src2[2 * w + 1];
+        }
+        dest += dstStride;
+        src1 += src1Stride;
+        src2 += src2Stride;
+    }
+}
+
+static void deinterleaveWords_c(const uint8_t *src, uint8_t *dst1, uint8_t *dst2,
+                                int width, int height, int srcStride,
+                                int dst1Stride, int dst2Stride)
+{
+    int h;
+
+    for (h = 0; h < height; h++) {
+        int w;
+        for (w = 0; w < width; w++) {
+            dst1[2 * w + 0] = src[4 * w + 0];
+            dst1[2 * w + 1] = src[4 * w + 1];
+            dst2[2 * w + 0] = src[4 * w + 2];
+            dst2[2 * w + 1] = src[4 * w + 3];
+        }
+        src  += srcStride;
+        dst1 += dst1Stride;
+        dst2 += dst2Stride;
+    }
+}
+
 static inline void vu9_to_vu12_c(const uint8_t *src1, const uint8_t *src2,
                                  uint8_t *dst1, uint8_t *dst2,
                                  int width, int height,
@@ -982,6 +1022,8 @@ static av_cold void rgb2rgb_init_c(void)
     ff_rgb24toyv12     = ff_rgb24toyv12_c;
     interleaveBytes    = interleaveBytes_c;
     deinterleaveBytes  = deinterleaveBytes_c;
+    interleaveWords    = interleaveWords_c;
+    deinterleaveWords  = deinterleaveWords_c;
     vu9_to_vu12        = vu9_to_vu12_c;
     yvu9_to_yuy2       = yvu9_to_yuy2_c;
 
