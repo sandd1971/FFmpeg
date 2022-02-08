@@ -1614,6 +1614,8 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         if (c->cvtSrcBpc < 8)   c->cvtSrcBpc = 8;
         c->cvtDstBpc = descDst->comp[0].depth;
         if (c->cvtDstBpc < 8)   c->cvtDstBpc = 8;
+        if (c->cvtSrcFmt == AV_PIX_FMT_P010)   c->cvtSrcBpc = 16;
+        if (c->cvtDstFmt == AV_PIX_FMT_P010)   c->cvtDstBpc = 16;
         av_pix_fmt_get_chroma_sub_sample(c->cvtSrcFmt, &c->chrCvtSrcHSubSample, &c->chrCvtSrcVSubSample);
         av_pix_fmt_get_chroma_sub_sample(c->cvtDstFmt, &c->chrCvtDstHSubSample, &c->chrCvtDstVSubSample);
 
