@@ -2292,8 +2292,7 @@ void ff_get_unscaled_swscale(SwsContext *c)
     if (ARCH_AARCH64)
         ff_get_unscaled_swscale_aarch64(c);
 
-    if (c->use_ipp == 1)
-        ff_get_unscaled_swscale_ipp(c);
+    ff_get_unscaled_swscale_ipp(c);
 }
 
 /* Convert the palette to the same packed 32-bit format as the palette */

@@ -2489,6 +2489,17 @@ static const AVPixFmtDescriptor av_pix_fmt_descriptors[AV_PIX_FMT_NB] = {
         },
         .flags = AV_PIX_FMT_FLAG_PLANAR,
     },
+    [AV_PIX_FMT_V210] = {
+        .name = "v210",
+        .nb_components = 3,
+        .log2_chroma_w = 1,
+        .log2_chroma_h = 0,
+        .comp = {
+            { 0, 2, 0, 0, 10 },        /* Y */
+            { 0, 4, 1, 0, 10 },        /* U */
+            { 0, 4, 3, 0, 10 },        /* V */
+        },
+    },
 };
 
 static const char * const color_range_names[] = {

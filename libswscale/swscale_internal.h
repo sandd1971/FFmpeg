@@ -567,6 +567,16 @@ typedef struct SwsContext {
     int chrCvtDstHSubSample;      ///< Binary logarithm of horizontal subsampling factor between luma/alpha and chroma planes in destination image.
     int chrCvtDstVSubSample;      ///< Binary logarithm of vertical   subsampling factor between luma/alpha and chroma planes in destination image.
 
+    int v210_aligned_input;
+    void(*v210_decode_line)(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, ptrdiff_t width);
+
+    int v210_sample_factor_8;
+    int v210_sample_factor_10;
+    int v210_sample_factor_16;
+    void(*v210_encode_line_8)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t width);
+    void(*v210_encode_line_10)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width);
+    void(*v210_encode_line_16)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width);
+
     /* function pointers for swscale() */
     yuv2planar1_fn yuv2plane1;
     yuv2planarX_fn yuv2planeX;

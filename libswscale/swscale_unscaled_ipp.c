@@ -23,6 +23,9 @@
 #include "libavutil/imgutils.h"
 #include "ipp.h"
 
+extern void ff_sws_init_v210(SwsContext *c);
+
+#define IPP_STRIDE_ALIGN    64
 #define BPP_M_TO_N(m, n) ((1 << n) - 1.0) / ((1 << m) - 1.0)
 
 static void fillPlane(uint8_t *plane, int stride, int width, int height, int y, uint8_t val)
@@ -1188,6 +1191,92 @@ static int yuv422pXToUyvy_ipp(SwsContext *c, const uint8_t *src[],
     return yuv422pToUyvy_ipp(c, yuv422p, c->ippConvertStride, srcSliceY, srcSliceH, dstParam, dstStride);
 }
 
+#define V210_CONVERT_FUNC
+
+#define TYPE uint8_t
+#define DEPTH 8
+#define RENAME(a) a ## _ ## 8
+#include "v210_template.c"
+#undef RENAME
+#undef DEPTH
+#undef TYPE
+
+#define TYPE uint16_t
+#define DEPTH 10
+#define RENAME(a) a ## _ ## 10
+#include "v210_template.c"
+#undef RENAME
+#undef DEPTH
+#undef TYPE
+
+#define TYPE uint16_t
+#define DEPTH 16
+#define RENAME(a) a ## _ ## 16
+#include "v210_template.c"
+#undef RENAME
+#undef DEPTH
+#undef TYPE
+
+#define READ_PIXELS(a, b, c, bitdepth)                 \
+    do {                                               \
+        val  = av_le2ne32(*src++);                     \
+        *a++ = (val & 0x000003FF) << (bitdepth - 10);  \
+        *b++ = (val & 0x000FFC00) >> (20 - bitdepth);  \
+        *c++ = (val & 0x3FF00000) >> (30 - bitdepth);  \
+    } while (0)
+
+static int v210_decode_slice(SwsContext *c, const uint8_t *psrc[],
+    int srcStride[], int srcSliceY, int srcSliceH,
+    uint8_t *dstParam[], int dstStride[])
+{
+    int aligned_input = !((uintptr_t)psrc[0] & 0x1f) && !(srcStride[0] & 0x1f);
+    if (aligned_input != c->v210_aligned_input) {
+        c->v210_aligned_input = aligned_input;
+        ff_sws_init_v210(c);
+    }
+
+    for (int h = 0; h < srcSliceH; h++) {
+        const uint32_t *src = (const uint32_t*)(psrc[0] + h * srcStride[0]);
+        uint16_t *y = (uint16_t *)(dstParam[0] + dstStride[0] * (srcSliceY + h));
+        uint16_t *u = (uint16_t *)(dstParam[1] + dstStride[1] * (srcSliceY + h));
+        uint16_t *v = (uint16_t *)(dstParam[2] + dstStride[2] * (srcSliceY + h));
+        uint32_t val;
+
+        int w = (c->dstW / 12) * 12;
+        c->v210_decode_line(src, y, u, v, w);
+
+        y += w;
+        u += w >> 1;
+        v += w >> 1;
+        src += (w << 1) / 3;
+
+        if (w < c->srcW - 5) {
+            READ_PIXELS(u, y, v, c->dstBpc);
+            READ_PIXELS(y, u, y, c->dstBpc);
+            READ_PIXELS(v, y, u, c->dstBpc);
+            READ_PIXELS(y, v, y, c->dstBpc);
+            w += 6;
+        }
+
+        if (w < c->srcW - 1) {
+            READ_PIXELS(u, y, v, c->dstBpc);
+
+            val = av_le2ne32(*src++);
+            *y++ = (val & 0x000003FF) << (c->dstBpc - 10);
+            if (w < c->srcW - 3) {
+                *u++ = (val & 0x000FFC00) >> (20 - c->dstBpc);
+                *y++ = (val & 0x3FF00000) >> (30 - c->dstBpc);
+
+                val = av_le2ne32(*src++);
+                *v++ = (val & 0x000003FF) << (c->dstBpc - 10);
+                *y++ = (val & 0x000FFC00) >> (20 - c->dstBpc);
+            }
+        }
+    }
+
+    return srcSliceH;
+}
+
 void ff_get_unscaled_swscale_ipp(SwsContext *c)
 {
     const enum AVPixelFormat srcFormat = c->srcFormat;
@@ -1197,6 +1286,42 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         (srcFormat == AV_PIX_FMT_YUV420P && dstFormat == AV_PIX_FMT_YUVA420P) ||
         (srcFormat == AV_PIX_FMT_YUVA420P && dstFormat == AV_PIX_FMT_YUV420P))
         return;
+
+    if (srcFormat == AV_PIX_FMT_V210 || dstFormat == AV_PIX_FMT_V210)
+    {
+        c->v210_aligned_input = 1;
+        ff_sws_init_v210(c);
+
+        if (srcFormat == AV_PIX_FMT_V210) {
+            switch (dstFormat) {
+            case AV_PIX_FMT_YUV422P10:
+            case AV_PIX_FMT_YUV422P16:
+                c->convert_unscaled = v210_decode_slice;
+                break;
+            }
+        }
+        else if (dstFormat == AV_PIX_FMT_V210) {
+            switch (srcFormat) {
+            case AV_PIX_FMT_YUV420P:
+            case AV_PIX_FMT_YUV422P:
+                c->convert_unscaled = v210_encode_slice_8;
+                break;
+            case AV_PIX_FMT_YUV420P10:
+            case AV_PIX_FMT_YUV422P10:
+                c->convert_unscaled = v210_encode_slice_10;
+                break;
+            case AV_PIX_FMT_YUV420P16:
+            case AV_PIX_FMT_YUV422P16:
+                c->convert_unscaled = v210_encode_slice_16;
+                break;
+            }
+        }
+    }
+    else
+    {
+        if (c->use_ipp == 0)
+            return;
+    }
 
     c->cvtSrcFmt = c->srcFormat;
     c->cvtDstFmt = c->dstFormat;
@@ -1297,7 +1422,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV420P12:
         case AV_PIX_FMT_YUV420P14:
         case AV_PIX_FMT_YUV420P16:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = nv12ToYuv420pX_ipp;
@@ -1310,7 +1435,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV422P12:
         case AV_PIX_FMT_YUV422P14:
         case AV_PIX_FMT_YUV422P16:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = nv12ToYuv422pX_ipp;
@@ -1348,16 +1473,14 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV420P12:
         case AV_PIX_FMT_YUV420P14:
         case AV_PIX_FMT_YUV420P16:
-            c->cvtSrcFmt = srcFormat == AV_PIX_FMT_P010 ?
-                AV_PIX_FMT_YUV420P10 : AV_PIX_FMT_YUV420P16;
+            c->cvtSrcFmt = AV_PIX_FMT_YUV420P16;
             c->convert_unscaled = p0xxToYuv420pX_ipp;
             break;
         case AV_PIX_FMT_YUV422P10:
         case AV_PIX_FMT_YUV422P12:
         case AV_PIX_FMT_YUV422P14:
         case AV_PIX_FMT_YUV422P16:
-            c->cvtSrcFmt = srcFormat == AV_PIX_FMT_P010 ?
-                AV_PIX_FMT_YUV420P10 : AV_PIX_FMT_YUV420P16;
+            c->cvtSrcFmt = AV_PIX_FMT_YUV420P16;
             c->convert_unscaled = p0xxToYuv422pX_ipp;
             break;
         }
@@ -1365,15 +1488,15 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         {
             if (c->dstBpc == 8)
             {
-                if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_NV12, 64) < 0)
+                if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_NV12, IPP_STRIDE_ALIGN) < 0)
                 {
                     c->convert_unscaled = oldConvertFunc;
                     return;
                 }
             }
-            else if (c->srcBpc != c->dstBpc)
+            else
             {
-                if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P16, 64) < 0)
+                if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P16, IPP_STRIDE_ALIGN) < 0)
                 {
                     c->convert_unscaled = oldConvertFunc;
                     return;
@@ -1406,7 +1529,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV420P12:
         case AV_PIX_FMT_YUV420P14:
         case AV_PIX_FMT_YUV420P16:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = bgraToYuv420pX_ipp;
@@ -1415,7 +1538,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV422P12:
         case AV_PIX_FMT_YUV422P14:
         case AV_PIX_FMT_YUV422P16:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV422P;
             c->convert_unscaled = bgraToYuv422pX_ipp;
@@ -1448,7 +1571,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV420P16:
         case AV_PIX_FMT_P010:
         case AV_PIX_FMT_P016:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = yuyvToYuv420pX_ipp;
@@ -1457,7 +1580,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV422P12:
         case AV_PIX_FMT_YUV422P14:
         case AV_PIX_FMT_YUV422P16:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV422P;
             c->convert_unscaled = yuyvToYuv422pX_ipp;
@@ -1490,7 +1613,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV420P16:
         case AV_PIX_FMT_P010:
         case AV_PIX_FMT_P016:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = uyvyToYuv420pX_ipp;
@@ -1499,7 +1622,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         case AV_PIX_FMT_YUV422P12:
         case AV_PIX_FMT_YUV422P14:
         case AV_PIX_FMT_YUV422P16:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtSrcFmt = AV_PIX_FMT_YUV422P;
             c->convert_unscaled = uyvyToYuv422pX_ipp;
@@ -1513,26 +1636,26 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         switch (dstFormat)
         {
         case AV_PIX_FMT_YUYV422:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = yuv420pXToYuy2_ipp;
             break;
         case AV_PIX_FMT_UYVY422:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = yuv420pXToUyvy_ipp;
             break;
         case AV_PIX_FMT_BGRA:
         case AV_PIX_FMT_BGR0:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = yuv420pXToBGRA_ipp;
             break;
         case AV_PIX_FMT_NV12:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = yuv420pXToNv12_ipp;
@@ -1562,26 +1685,26 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
         switch (dstFormat)
         {
         case AV_PIX_FMT_YUYV422:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV422P;
             c->convert_unscaled = yuv422pXToYuy2_ipp;
             break;
         case AV_PIX_FMT_UYVY422:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV422P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV422P;
             c->convert_unscaled = yuv422pXToUyvy_ipp;
             break;
         case AV_PIX_FMT_BGRA:
         case AV_PIX_FMT_BGR0:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = yuv420pXToBGRA_ipp;
             break;
         case AV_PIX_FMT_NV12:
-            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, 64) < 0)
+            if (av_image_alloc(c->ippConvert, c->ippConvertStride, c->dstW, c->dstH, AV_PIX_FMT_YUV420P, IPP_STRIDE_ALIGN) < 0)
                 return;
             c->cvtDstFmt = AV_PIX_FMT_YUV420P;
             c->convert_unscaled = yuv420pXToNv12_ipp;

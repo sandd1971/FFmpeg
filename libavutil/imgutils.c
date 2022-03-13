@@ -73,6 +73,15 @@ int image_get_linesize(int width, int plane,
     return linesize;
 }
 
+static inline
+int image_get_linesize_v210(int width, int plane)
+{
+    if (plane != 0)
+        return 0;
+    int aligned_width = ((width + 47) / 48) * 48;
+    return aligned_width * 8 / 3;
+}
+
 int av_image_get_linesize(enum AVPixelFormat pix_fmt, int width, int plane)
 {
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
@@ -82,7 +91,15 @@ int av_image_get_linesize(enum AVPixelFormat pix_fmt, int width, int plane)
     if (!desc || desc->flags & AV_PIX_FMT_FLAG_HWACCEL)
         return AVERROR(EINVAL);
 
+    if (pix_fmt == AV_PIX_FMT_V210)
+        return image_get_linesize_v210(width, plane);
+
     av_image_fill_max_pixsteps(max_step, max_step_comp, desc);
+    if (pix_fmt == AV_PIX_FMT_YUV422P10 ||
+        pix_fmt == AV_PIX_FMT_YUV422P12 ||
+        pix_fmt == AV_PIX_FMT_YUV422P14 ||
+        pix_fmt == AV_PIX_FMT_YUV422P16)
+        width += 4; // 行尾增加 4 个像素的冗余空间，避免解码 V210 格式时，汇编指令破坏下一行的头部
     return image_get_linesize(width, plane, max_step[plane], max_step_comp[plane], desc);
 }
 
@@ -94,11 +111,20 @@ int av_image_fill_linesizes(int linesizes[4], enum AVPixelFormat pix_fmt, int wi
     int max_step_comp[4];       /* the component for each plane which has the max pixel step */
 
     memset(linesizes, 0, 4*sizeof(linesizes[0]));
+    if (pix_fmt == AV_PIX_FMT_V210) {
+        linesizes[0] = image_get_linesize_v210(width, 0);
+        return 0;
+    }
 
     if (!desc || desc->flags & AV_PIX_FMT_FLAG_HWACCEL)
         return AVERROR(EINVAL);
 
     av_image_fill_max_pixsteps(max_step, max_step_comp, desc);
+    if (pix_fmt == AV_PIX_FMT_YUV422P10 ||
+        pix_fmt == AV_PIX_FMT_YUV422P12 ||
+        pix_fmt == AV_PIX_FMT_YUV422P14 ||
+        pix_fmt == AV_PIX_FMT_YUV422P16)
+        width += 4; // 行尾增加 4 个像素的冗余空间，避免解码 V210 格式时，汇编指令破坏下一行的头部
     for (i = 0; i < 4; i++) {
         if ((ret = image_get_linesize(width, i, max_step[i], max_step_comp[i], desc)) < 0)
             return ret;

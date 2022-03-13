@@ -276,6 +276,7 @@ static const FormatEntry format_entries[] = {
     [AV_PIX_FMT_P216LE]      = { 1, 1 },
     [AV_PIX_FMT_P416BE]      = { 1, 1 },
     [AV_PIX_FMT_P416LE]      = { 1, 1 },
+    [AV_PIX_FMT_V210]        = { 1, 1 },
 };
 
 void ff_shuffle_filter_coefficients(SwsContext *c, int *filterPos, int filterSize, int16_t *filter, int dstW){
@@ -1328,6 +1329,27 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
     if (ff_thread_once(&rgb2rgb_once, ff_sws_rgb2rgb_init) != 0)
         return AVERROR_UNKNOWN;
 
+    if (srcFormat == AV_PIX_FMT_V210 || dstFormat == AV_PIX_FMT_V210) {
+        if (srcW != dstW || srcH != dstH)
+            return -1;
+
+        if (srcFormat == AV_PIX_FMT_V210) {
+            if (dstFormat != AV_PIX_FMT_YUV422P10 &&
+                dstFormat != AV_PIX_FMT_YUV422P16)
+                return -1;
+        }
+
+        if (dstFormat == AV_PIX_FMT_V210) {
+            if (srcFormat != AV_PIX_FMT_YUV420P &&
+                srcFormat != AV_PIX_FMT_YUV420P10 &&
+                srcFormat != AV_PIX_FMT_YUV420P16 &&
+                srcFormat != AV_PIX_FMT_YUV422P &&
+                srcFormat != AV_PIX_FMT_YUV422P10 &&
+                srcFormat != AV_PIX_FMT_YUV422P16)
+                return -1;
+        }
+    }
+
     unscaled = (srcW == dstW && srcH == dstH);
 
     c->srcRange |= handle_jpeg(&c->srcFormat);
@@ -1985,6 +2007,9 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
             return 0;
         }
     }
+
+    if (srcFormat == AV_PIX_FMT_V210 || dstFormat == AV_PIX_FMT_V210)
+        return -1;
 
     ff_sws_init_scale(c);
 
