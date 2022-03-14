@@ -28,25 +28,25 @@
  */
 
 #define UNCHECKED_BITSTREAM_READER 1
-#include <limits.h>
 
 #include "libavutil/attributes.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/internal.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/mem_internal.h"
+#include "libavutil/thread.h"
 #include "avcodec.h"
 #include "mpegvideo.h"
 #include "h263.h"
 #include "h263data.h"
-#include "internal.h"
+#include "h263dec.h"
 #include "mathops.h"
 #include "mpegutils.h"
 #include "unary.h"
-#include "flv.h"
-#include "rv10.h"
+#include "rv10dec.h"
 #include "mpeg4video.h"
 #include "mpegvideodata.h"
+#include "mpeg4videodec.h"
 
 // The defines below define the number of bits that are read at once for
 // reading vlc values. Changing these may improve speed and data cache needs
@@ -104,35 +104,35 @@ static VLC cbpc_b_vlc;
 
 /* init vlcs */
 
-/* XXX: find a better solution to handle static init */
+static av_cold void h263_decode_init_vlc(void)
+{
+    INIT_VLC_STATIC(&ff_h263_intra_MCBPC_vlc, INTRA_MCBPC_VLC_BITS, 9,
+                    ff_h263_intra_MCBPC_bits, 1, 1,
+                    ff_h263_intra_MCBPC_code, 1, 1, 72);
+    INIT_VLC_STATIC(&ff_h263_inter_MCBPC_vlc, INTER_MCBPC_VLC_BITS, 28,
+                    ff_h263_inter_MCBPC_bits, 1, 1,
+                    ff_h263_inter_MCBPC_code, 1, 1, 198);
+    INIT_VLC_STATIC(&ff_h263_cbpy_vlc, CBPY_VLC_BITS, 16,
+                    &ff_h263_cbpy_tab[0][1], 2, 1,
+                    &ff_h263_cbpy_tab[0][0], 2, 1, 64);
+    INIT_VLC_STATIC(&ff_h263_mv_vlc, H263_MV_VLC_BITS, 33,
+                    &ff_mvtab[0][1], 2, 1,
+                    &ff_mvtab[0][0], 2, 1, 538);
+    ff_h263_init_rl_inter();
+    INIT_VLC_RL(ff_h263_rl_inter, 554);
+    INIT_FIRST_VLC_RL(ff_rl_intra_aic, 554);
+    INIT_VLC_STATIC(&h263_mbtype_b_vlc, H263_MBTYPE_B_VLC_BITS, 15,
+                    &ff_h263_mbtype_b_tab[0][1], 2, 1,
+                    &ff_h263_mbtype_b_tab[0][0], 2, 1, 80);
+    INIT_VLC_STATIC(&cbpc_b_vlc, CBPC_B_VLC_BITS, 4,
+                    &ff_cbpc_b_tab[0][1], 2, 1,
+                    &ff_cbpc_b_tab[0][0], 2, 1, 8);
+}
+
 av_cold void ff_h263_decode_init_vlc(void)
 {
-    static volatile int done = 0;
-
-    if (!done) {
-        INIT_VLC_STATIC(&ff_h263_intra_MCBPC_vlc, INTRA_MCBPC_VLC_BITS, 9,
-                 ff_h263_intra_MCBPC_bits, 1, 1,
-                 ff_h263_intra_MCBPC_code, 1, 1, 72);
-        INIT_VLC_STATIC(&ff_h263_inter_MCBPC_vlc, INTER_MCBPC_VLC_BITS, 28,
-                 ff_h263_inter_MCBPC_bits, 1, 1,
-                 ff_h263_inter_MCBPC_code, 1, 1, 198);
-        INIT_VLC_STATIC(&ff_h263_cbpy_vlc, CBPY_VLC_BITS, 16,
-                 &ff_h263_cbpy_tab[0][1], 2, 1,
-                 &ff_h263_cbpy_tab[0][0], 2, 1, 64);
-        INIT_VLC_STATIC(&ff_h263_mv_vlc, H263_MV_VLC_BITS, 33,
-                 &ff_mvtab[0][1], 2, 1,
-                 &ff_mvtab[0][0], 2, 1, 538);
-        ff_h263_init_rl_inter();
-        INIT_VLC_RL(ff_h263_rl_inter, 554);
-        INIT_FIRST_VLC_RL(ff_rl_intra_aic, 554);
-        INIT_VLC_STATIC(&h263_mbtype_b_vlc, H263_MBTYPE_B_VLC_BITS, 15,
-                 &ff_h263_mbtype_b_tab[0][1], 2, 1,
-                 &ff_h263_mbtype_b_tab[0][0], 2, 1, 80);
-        INIT_VLC_STATIC(&cbpc_b_vlc, CBPC_B_VLC_BITS, 4,
-                 &ff_cbpc_b_tab[0][1], 2, 1,
-                 &ff_cbpc_b_tab[0][0], 2, 1, 8);
-        done = 1;
-    }
+    static AVOnce init_static_once = AV_ONCE_INIT;
+    ff_thread_once(&init_static_once, h263_decode_init_vlc);
 }
 
 int ff_h263_decode_mba(MpegEncContext *s)
@@ -1150,7 +1150,6 @@ int ff_h263_decode_picture_header(MpegEncContext *s)
             return -1; /* SAC: off */
         }
         s->obmc= get_bits1(&s->gb); /* Advanced prediction mode */
-        s->unrestricted_mv = s->h263_long_vectors || s->obmc;
 
         s->pb_frame = get_bits1(&s->gb);
         s->chroma_qscale= s->qscale = get_bits(&s->gb, 5);
@@ -1180,7 +1179,6 @@ int ff_h263_decode_picture_header(MpegEncContext *s)
             s->obmc= get_bits1(&s->gb); /* Advanced prediction mode */
             s->h263_aic = get_bits1(&s->gb); /* Advanced Intra Coding (AIC) */
             s->loop_filter= get_bits1(&s->gb);
-            s->unrestricted_mv = s->umvplus || s->obmc || s->loop_filter;
             if(s->avctx->lowres)
                 s->loop_filter = 0;
 
@@ -1223,8 +1221,8 @@ int ff_h263_decode_picture_header(MpegEncContext *s)
         if (ufep) {
             if (format == 6) {
                 /* Custom Picture Format (CPFMT) */
-                s->aspect_ratio_info = get_bits(&s->gb, 4);
-                ff_dlog(s->avctx, "aspect: %d\n", s->aspect_ratio_info);
+                int aspect_ratio_info = get_bits(&s->gb, 4);
+                ff_dlog(s->avctx, "aspect: %d\n", aspect_ratio_info);
                 /* aspect ratios:
                 0 - forbidden
                 1 - 1:1
@@ -1238,12 +1236,12 @@ int ff_h263_decode_picture_header(MpegEncContext *s)
                 check_marker(s->avctx, &s->gb, "in dimensions");
                 height = get_bits(&s->gb, 9) * 4;
                 ff_dlog(s->avctx, "\nH.263+ Custom picture: %dx%d\n",width,height);
-                if (s->aspect_ratio_info == FF_ASPECT_EXTENDED) {
+                if (aspect_ratio_info == FF_ASPECT_EXTENDED) {
                     /* expected dimensions */
                     s->avctx->sample_aspect_ratio.num= get_bits(&s->gb, 8);
                     s->avctx->sample_aspect_ratio.den= get_bits(&s->gb, 8);
                 }else{
-                    s->avctx->sample_aspect_ratio= ff_h263_pixel_aspect[s->aspect_ratio_info];
+                    s->avctx->sample_aspect_ratio= ff_h263_pixel_aspect[aspect_ratio_info];
                 }
             } else {
                 width = ff_h263_format[format][0];

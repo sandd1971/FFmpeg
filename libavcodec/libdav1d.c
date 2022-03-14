@@ -230,8 +230,8 @@ static av_cold int libdav1d_init(AVCodecContext *c)
     s.frame_size_limit = c->max_pixels;
     if (dav1d->apply_grain >= 0)
         s.apply_grain = dav1d->apply_grain;
-    else if (c->export_side_data & AV_CODEC_EXPORT_DATA_FILM_GRAIN)
-        s.apply_grain = 0;
+    else
+        s.apply_grain = !(c->export_side_data & AV_CODEC_EXPORT_DATA_FILM_GRAIN);
 
     s.all_layers = dav1d->all_layers;
     if (dav1d->operating_point >= 0)
@@ -347,8 +347,10 @@ static int libdav1d_receive_frame(AVCodecContext *c, AVFrame *frame)
     if (res < 0) {
         if (res == AVERROR(EINVAL))
             res = AVERROR_INVALIDDATA;
-        if (res != AVERROR(EAGAIN))
+        if (res != AVERROR(EAGAIN)) {
+            dav1d_data_unref(data);
             return res;
+        }
     }
 
     res = dav1d_get_picture(dav1d->c, p);

@@ -27,7 +27,6 @@
 
 #include "config.h"
 #include "libavutil/avassert.h"
-#include "libavutil/avstring.h"
 #include "libavutil/channel_layout.h"
 #include "libavutil/intreadwrite.h"
 #include "libavutil/mem.h"
@@ -38,14 +37,12 @@
 #include "codec.h"
 #include "hwconfig.h"
 #include "thread.h"
+#include "threadframe.h"
 #include "internal.h"
 #include "put_bits.h"
-#include "raw.h"
+#include "startcode.h"
 #include <stdlib.h>
-#include <stdarg.h>
-#include <stdatomic.h>
 #include <limits.h>
-#include <float.h>
 
 #ifndef _DEBUG
 
@@ -584,6 +581,8 @@ enum AVCodecID av_get_pcm_codec(enum AVSampleFormat fmt, int be)
 int av_get_bits_per_sample(enum AVCodecID codec_id)
 {
     switch (codec_id) {
+    case AV_CODEC_ID_DFPWM:
+        return 1;
     case AV_CODEC_ID_ADPCM_SBPRO_2:
         return 2;
     case AV_CODEC_ID_ADPCM_SBPRO_3:
@@ -882,7 +881,7 @@ int ff_thread_ref_frame(ThreadFrame *dst, const ThreadFrame *src)
 
     if (src->progress &&
         !(dst->progress = av_buffer_ref(src->progress))) {
-        ff_thread_release_buffer(dst->owner[0], dst);
+        ff_thread_release_ext_buffer(dst->owner[0], dst);
         return AVERROR(ENOMEM);
     }
 
@@ -896,14 +895,26 @@ enum AVPixelFormat ff_thread_get_format(AVCodecContext *avctx, const enum AVPixe
     return ff_get_format(avctx, fmt);
 }
 
-int ff_thread_get_buffer(AVCodecContext *avctx, ThreadFrame *f, int flags)
+int ff_thread_get_buffer(AVCodecContext *avctx, AVFrame *f, int flags)
+{
+    return ff_get_buffer(avctx, f, flags);
+}
+
+int ff_thread_get_ext_buffer(AVCodecContext *avctx, ThreadFrame *f, int flags)
 {
     f->owner[0] = f->owner[1] = avctx;
     return ff_get_buffer(avctx, f->f, flags);
 }
 
-void ff_thread_release_buffer(AVCodecContext *avctx, ThreadFrame *f)
+void ff_thread_release_buffer(AVCodecContext *avctx, AVFrame *f)
 {
+    if (f)
+        av_frame_unref(f);
+}
+
+void ff_thread_release_ext_buffer(AVCodecContext *avctx, ThreadFrame *f)
+{
+    f->owner[0] = f->owner[1] = NULL;
     if (f->f)
         av_frame_unref(f->f);
 }

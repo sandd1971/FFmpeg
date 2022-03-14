@@ -22,14 +22,12 @@
 #include <string.h>
 
 #include "libavutil/avassert.h"
-#include "libavutil/common.h"
-#include "libavutil/internal.h"
+#include "libavutil/intreadwrite.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/mem.h"
 #include "libavutil/rational.h"
 
-#include "bytestream.h"
-#include "internal.h"
+#include "defs.h"
 #include "packet.h"
 #include "packet_internal.h"
 
@@ -49,8 +47,8 @@ void av_init_packet(AVPacket *pkt)
     pkt->opaque_ref           = NULL;
     pkt->time_base            = av_make_q(0, 1);
 
-    pkt->pict_type            = AV_PICTURE_TYPE_NONE;
-    pkt->picture_structure    = AV_PICTURE_STRUCTURE_UNKNOWN;
+    pkt->pict_type            = 0;
+    pkt->picture_structure    = 0;
     pkt->output_picture_number= 0;
     pkt->nb_fields            = 0;
 }

@@ -417,7 +417,7 @@ typedef struct AVPacket {
     AVRational time_base;
 
     int pict_type;
-    enum AVPictureStructure picture_structure;
+    int picture_structure;
     int output_picture_number;
     int nb_fields;
 } AVPacket;
