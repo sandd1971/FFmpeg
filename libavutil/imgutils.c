@@ -145,6 +145,7 @@ int av_image_fill_plane_sizes(size_t sizes[4], enum AVPixelFormat pix_fmt,
     if (!desc || desc->flags & AV_PIX_FMT_FLAG_HWACCEL)
         return AVERROR(EINVAL);
 
+    height = FFALIGN(height, 4);
     if (linesizes[0] > SIZE_MAX / height)
         return AVERROR(EINVAL);
     sizes[0] = linesizes[0] * (size_t)height;
