@@ -26,6 +26,7 @@
 #include "libavutil/error.h"
 #include "libavutil/macros.h"
 #include "libavutil/mem.h"
+#include "libavutil/thread.h"
 #include "libavutil/slicethread.h"
 
 #include "avfilter.h"
