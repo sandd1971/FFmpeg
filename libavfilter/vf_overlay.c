@@ -485,9 +485,9 @@ static av_always_inline void blend_plane_##depth##_##nbits##bits(AVFilterContext
         da = dap + ((xp+k) << hsub);                                                                       \
         kmax = FFMIN(-xp + dst_wp, src_wp);                                                                \
                                                                                                            \
-        if (nbits == 8 && ((vsub && j+1 < src_hp) || !vsub) && octx->blend_row[i]) {                       \
+        if ((nbits == 8 || nbits == 10) && ((vsub && j+1 < src_hp) || !vsub) && octx->blend_row[i]) {      \
             int c = octx->blend_row[i]((uint8_t*)d, (uint8_t*)da, (uint8_t*)s,                             \
-                    (uint8_t*)a, kmax - k, src->linesize[3]);                                              \
+                    (uint8_t*)a, (kmax - k) * bytes, src->linesize[3]) / bytes;                            \
                                                                                                            \
             s += c;                                                                                        \
             d += dst_step * c;                                                                             \
