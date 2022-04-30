@@ -21,6 +21,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "config_components.h"
+
 #include <stdint.h>
 #include <inttypes.h>
 
@@ -60,6 +62,7 @@
 #include "mov_chan.h"
 #include "movenc_ttml.h"
 #include "ttmlenc.h"
+#include "version.h"
 #include "vpcc.h"
 
 static const AVOption options[] = {
@@ -864,20 +867,38 @@ static int mov_write_dmlp_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *tra
 
 static int mov_write_chan_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *track)
 {
-    uint32_t layout_tag, bitmap;
+    uint32_t layout_tag, bitmap, *channel_desc;
     int64_t pos = avio_tell(pb);
-
-    layout_tag = ff_mov_get_channel_layout_tag(track->par->codec_id,
-                                               track->par->channel_layout,
-                                               &bitmap);
-    if (!layout_tag) {
-        av_log(s, AV_LOG_WARNING, "not writing 'chan' tag due to "
-               "lack of channel information\n");
-        return 0;
-    }
+    int num_desc, ret;
 
     if (track->multichannel_as_mono)
         return 0;
+
+    ret = ff_mov_get_channel_layout_tag(track->par, &layout_tag,
+                                        &bitmap, &channel_desc);
+
+    if (ret < 0) {
+        if (ret == AVERROR(ENOSYS)) {
+            av_log(s, AV_LOG_WARNING, "not writing 'chan' tag due to "
+                                      "lack of channel information\n");
+            ret = 0;
+        }
+
+        return ret;
+    }
+
+    if (layout_tag == MOV_CH_LAYOUT_MONO && track->mono_as_fc > 0) {
+        av_assert0(!channel_desc);
+        channel_desc = av_malloc(sizeof(*channel_desc));
+        if (!channel_desc)
+            return AVERROR(ENOMEM);
+
+        layout_tag = 0;
+        bitmap = 0;
+        *channel_desc = 3; // channel label "Center"
+    }
+
+    num_desc = layout_tag ? 0 : track->par->ch_layout.nb_channels;
 
     avio_wb32(pb, 0);           // Size
     ffio_wfourcc(pb, "chan");   // Type
@@ -885,7 +906,17 @@ static int mov_write_chan_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *tra
     avio_wb24(pb, 0);           // Flags
     avio_wb32(pb, layout_tag);  // mChannelLayoutTag
     avio_wb32(pb, bitmap);      // mChannelBitmap
-    avio_wb32(pb, 0);           // mNumberChannelDescriptions
+    avio_wb32(pb, num_desc);    // mNumberChannelDescriptions
+
+    for (int i = 0; i < num_desc; i++) {
+        avio_wb32(pb, channel_desc[i]); // mChannelLabel
+        avio_wb32(pb, 0);               // mChannelFlags
+        avio_wl32(pb, 0);               // mCoordinates[0]
+        avio_wl32(pb, 0);               // mCoordinates[1]
+        avio_wl32(pb, 0);               // mCoordinates[2]
+    }
+
+    av_free(channel_desc);
 
     return update_size(pb, pos);
 }
@@ -1137,7 +1168,7 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
     int ret = 0;
 
     if (track->mode == MODE_MOV) {
-        if (track->timescale > UINT16_MAX || !track->par->channels) {
+        if (track->timescale > UINT16_MAX || !track->par->ch_layout.nb_channels) {
             if (mov_get_lpcm_flags(track->par->codec_id))
                 tag = AV_RL32("lpcm");
             version = 2;
@@ -1173,7 +1204,7 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
         avio_wb32(pb, 0x00010000);
         avio_wb32(pb, 72);
         avio_wb64(pb, av_double2int(track->par->sample_rate));
-        avio_wb32(pb, track->par->channels);
+        avio_wb32(pb, track->par->ch_layout.nb_channels);
         avio_wb32(pb, 0x7F000000);
         avio_wb32(pb, av_get_bits_per_sample(track->par->codec_id));
         avio_wb32(pb, mov_get_lpcm_flags(track->par->codec_id));
@@ -1181,7 +1212,7 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
         avio_wb32(pb, get_samples_per_packet(track));
     } else {
         if (track->mode == MODE_MOV) {
-            avio_wb16(pb, track->par->channels);
+            avio_wb16(pb, track->par->ch_layout.nb_channels);
             if (track->par->codec_id == AV_CODEC_ID_PCM_U8 ||
                 track->par->codec_id == AV_CODEC_ID_PCM_S8)
                 avio_wb16(pb, 8); /* bits per sample */
@@ -1194,7 +1225,7 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
             if (track->par->codec_id == AV_CODEC_ID_FLAC ||
                 track->par->codec_id == AV_CODEC_ID_ALAC ||
                 track->par->codec_id == AV_CODEC_ID_OPUS) {
-                avio_wb16(pb, track->par->channels);
+                avio_wb16(pb, track->par->ch_layout.nb_channels);
             } else {
                 avio_wb16(pb, 2);
             }
@@ -1226,7 +1257,7 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
             avio_wb32(pb, 1); /*  must be 1 for  uncompressed formats */
         else
             avio_wb32(pb, track->par->frame_size); /* Samples per packet */
-        avio_wb32(pb, track->sample_size / track->par->channels); /* Bytes per packet */
+        avio_wb32(pb, track->sample_size / track->par->ch_layout.nb_channels); /* Bytes per packet */
         avio_wb32(pb, track->sample_size); /* Bytes per frame */
         avio_wb32(pb, 2); /* Bytes per sample */
     }
@@ -4392,7 +4423,7 @@ static int mov_write_isml_manifest(AVIOContext *pb, MOVMuxContext *mov, AVFormat
                             track->par->extradata_size);
             param_write_int(pb, "AudioTag", ff_codec_get_tag(ff_codec_wav_tags,
                                                              track->par->codec_id));
-            param_write_int(pb, "Channels", track->par->channels);
+            param_write_int(pb, "Channels", track->par->ch_layout.nb_channels);
             param_write_int(pb, "SamplingRate", track->par->sample_rate);
             param_write_int(pb, "BitsPerSample", 16);
             param_write_int(pb, "PacketSize", track->par->block_align ?
@@ -4750,7 +4781,8 @@ static int mov_write_sidx_tag(AVIOContext *pb,
 
     if (track->entry) {
         entries = 1;
-        presentation_time = track->cluster[0].dts + track->cluster[0].cts;
+        presentation_time = track->cluster[0].dts + track->cluster[0].cts -
+                            track->start_dts - track->start_cts;
         duration = track->end_pts -
                    (track->cluster[0].dts + track->cluster[0].cts);
         starts_with_SAP = track->cluster[0].flags & MOV_SYNC_SAMPLE;
@@ -4765,6 +4797,9 @@ static int mov_write_sidx_tag(AVIOContext *pb,
         if (entries <= 0)
             return 0;
         presentation_time = track->frag_info[0].time;
+        /* presentation_time <= 0 is handled by mov_add_tfra_entries() */
+        if (presentation_time > 0)
+            presentation_time -= track->start_dts + track->start_cts;
     }
 
     avio_wb32(pb, 0); /* size */
@@ -5150,7 +5185,7 @@ static int mov_write_uuidprof_tag(AVIOContext *pb, AVFormatContext *s)
     avio_wb32(pb, audio_kbitrate);
     avio_wb32(pb, audio_kbitrate);
     avio_wb32(pb, audio_rate);
-    avio_wb32(pb, audio_par->channels);
+    avio_wb32(pb, audio_par->ch_layout.nb_channels);
 
     avio_wb32(pb, 0x34);  /* size */
     ffio_wfourcc(pb, "VPRF");   /* video */
@@ -5638,9 +5673,8 @@ static int check_pkt(AVFormatContext *s, AVPacket *pkt)
 
     duration = pkt->dts - ref;
     if (pkt->dts < ref || duration >= INT_MAX) {
-        av_log(s, AV_LOG_ERROR, "Application provided duration: %"PRId64" / timestamp: %"PRId64" is out of range for mov/mp4 format\n",
-            duration, pkt->dts
-        );
+        av_log(s, AV_LOG_WARNING, "Packet duration: %"PRId64" / dts: %"PRId64" is out of range\n",
+               duration, pkt->dts);
 
         pkt->dts = ref + 1;
         pkt->pts = AV_NOPTS_VALUE;
@@ -6356,6 +6390,7 @@ static int mov_create_timecode_track(AVFormatContext *s, int index, int src_inde
     pkt->data = data;
     pkt->stream_index = index;
     pkt->flags = AV_PKT_FLAG_KEY;
+    pkt->pts = pkt->dts = av_rescale_q(tc.start, av_inv_q(rate), (AVRational){1,mov->movie_timescale});
     pkt->size = 4;
     AV_WB32(pkt->data, tc.start);
     ret = ff_mov_write_packet(s, pkt);
@@ -6803,7 +6838,8 @@ static int mov_init(AVFormatContext *s)
             }else if (st->codecpar->frame_size > 1){ /* assume compressed audio */
                 track->audio_vbr = 1;
             }else{
-                track->sample_size = (av_get_bits_per_sample(st->codecpar->codec_id) >> 3) * st->codecpar->channels;
+                track->sample_size = (av_get_bits_per_sample(st->codecpar->codec_id) >> 3) *
+                                     st->codecpar->ch_layout.nb_channels;
             }
             if (st->codecpar->codec_id == AV_CODEC_ID_ILBC ||
                 st->codecpar->codec_id == AV_CODEC_ID_ADPCM_IMA_QT) {
@@ -6939,7 +6975,8 @@ static int mov_write_header(AVFormatContext *s)
         }
 
         if (st->codecpar->codec_type != AVMEDIA_TYPE_AUDIO ||
-            track->par->channel_layout != AV_CH_LAYOUT_MONO)
+            av_channel_layout_compare(&track->par->ch_layout,
+                                      &(AVChannelLayout)AV_CHANNEL_LAYOUT_MONO))
             continue;
 
         for (j = 0; j < s->nb_streams; j++) {
@@ -6948,8 +6985,23 @@ static int mov_write_header(AVFormatContext *s)
             if (j == i)
                 continue;
 
+            if (stj->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
+                (trackj->par->ch_layout.nb_channels != 1 ||
+                 !av_channel_layout_compare(&trackj->par->ch_layout,
+                                            &(AVChannelLayout)AV_CHANNEL_LAYOUT_MONO))
+            )
+                track->mono_as_fc = -1;
+
+            if (stj->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
+                av_channel_layout_compare(&trackj->par->ch_layout,
+                                          &(AVChannelLayout)AV_CHANNEL_LAYOUT_MONO) &&
+                trackj->par->ch_layout.nb_channels == 1 && track->mono_as_fc >= 0
+            )
+                track->mono_as_fc++;
+
             if (stj->codecpar->codec_type != AVMEDIA_TYPE_AUDIO ||
-                trackj->par->channel_layout != AV_CH_LAYOUT_MONO ||
+                av_channel_layout_compare(&trackj->par->ch_layout,
+                                          &(AVChannelLayout)AV_CHANNEL_LAYOUT_MONO) ||
                 trackj->language != track->language ||
                 trackj->tag != track->tag
             )

@@ -20,6 +20,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "config_components.h"
+
 #include "libavutil/intreadwrite.h"
 
 #include "avformat.h"
@@ -79,7 +81,7 @@ static int adx_write_trailer(AVFormatContext *s)
 
     if (pb->seekable & AVIO_SEEKABLE_NORMAL) {
         int64_t file_size = avio_tell(pb);
-        uint64_t sample_count = (file_size - 36) / par->channels / 18 * 32;
+        uint64_t sample_count = (file_size - 36) / par->ch_layout.nb_channels / 18 * 32;
         if (sample_count <= UINT32_MAX) {
             avio_seek(pb, 12, SEEK_SET);
             avio_wb32(pb, sample_count);
