@@ -334,9 +334,9 @@ typedef struct VulkanOptExtension {
     FFVulkanExtensions flag;
 } VulkanOptExtension;
 
-static const VulkanOptExtension optional_instance_exts[] = {
-    /* For future use */
-};
+// static const VulkanOptExtension optional_instance_exts[] = {
+//     /* For future use */
+// };
 
 static const VulkanOptExtension optional_device_exts[] = {
     /* Misc or required by other extensions */
@@ -448,8 +448,8 @@ static int check_extensions(AVHWDeviceContext *ctx, int dev, AVDictionary *opts,
 
     if (!dev) {
         mod = "instance";
-        optional_exts = optional_instance_exts;
-        optional_exts_num = FF_ARRAY_ELEMS(optional_instance_exts);
+        optional_exts = NULL; // optional_instance_exts;
+        optional_exts_num = 0; // FF_ARRAY_ELEMS(optional_instance_exts);
         user_exts = av_dict_get(opts, "instance_extensions", NULL, 0);
         if (user_exts) {
             user_exts_str = av_strdup(user_exts->value);
