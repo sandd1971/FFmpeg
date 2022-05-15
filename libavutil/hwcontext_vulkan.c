@@ -1739,11 +1739,11 @@ static void vulkan_free_internal(AVVkFrame *f)
         CudaFunctions *cu = cu_internal->cuda_dl;
 
         for (int i = 0; i < planes; i++) {
-            if (internal->cu_sem[i])
+            if (internal->cu_sem[i] && cu->cuDestroyExternalSemaphore)
                 CHECK_CU(cu->cuDestroyExternalSemaphore(internal->cu_sem[i]));
-            if (internal->cu_mma[i])
+            if (internal->cu_mma[i] && cu->cuMipmappedArrayDestroy)
                 CHECK_CU(cu->cuMipmappedArrayDestroy(internal->cu_mma[i]));
-            if (internal->ext_mem[i])
+            if (internal->ext_mem[i] && cu->cuDestroyExternalMemory)
                 CHECK_CU(cu->cuDestroyExternalMemory(internal->ext_mem[i]));
 #ifdef _WIN32
             if (internal->ext_sem_handle[i])
@@ -3093,7 +3093,7 @@ static int vulkan_export_to_cuda(AVHWFramesContext *hwfc,
             }
 #endif
 
-            ret = CHECK_CU(cu->cuImportExternalMemory(&dst_int->ext_mem[i], &ext_desc));
+            ret = cu->cuImportExternalMemory == NULL ? -1 : CHECK_CU(cu->cuImportExternalMemory(&dst_int->ext_mem[i], &ext_desc));
             if (ret < 0) {
 #ifndef _WIN32
                 close(ext_desc.handle.fd);
@@ -3106,7 +3106,8 @@ static int vulkan_export_to_cuda(AVHWFramesContext *hwfc,
             tex_desc.arrayDesc.Width = p_w;
             tex_desc.arrayDesc.Height = p_h;
 
-            ret = CHECK_CU(cu->cuExternalMemoryGetMappedMipmappedArray(&dst_int->cu_mma[i],
+            ret = cu->cuExternalMemoryGetMappedMipmappedArray == NULL ? -1 :
+                  CHECK_CU(cu->cuExternalMemoryGetMappedMipmappedArray(&dst_int->cu_mma[i],
                                                                        dst_int->ext_mem[i],
                                                                        &tex_desc));
             if (ret < 0) {
@@ -3114,7 +3115,8 @@ static int vulkan_export_to_cuda(AVHWFramesContext *hwfc,
                 goto fail;
             }
 
-            ret = CHECK_CU(cu->cuMipmappedArrayGetLevel(&dst_int->cu_array[i],
+            ret = cu->cuMipmappedArrayGetLevel == NULL ? -1 :
+                  CHECK_CU(cu->cuMipmappedArrayGetLevel(&dst_int->cu_array[i],
                                                         dst_int->cu_mma[i], 0));
             if (ret < 0) {
                 err = AVERROR_EXTERNAL;
@@ -3138,7 +3140,8 @@ static int vulkan_export_to_cuda(AVHWFramesContext *hwfc,
             dst_int->ext_sem_handle[i] = ext_sem_desc.handle.win32.handle;
 #endif
 
-            ret = CHECK_CU(cu->cuImportExternalSemaphore(&dst_int->cu_sem[i],
+            ret = cu->cuImportExternalSemaphore == NULL ? -1 :
+                  CHECK_CU(cu->cuImportExternalSemaphore(&dst_int->cu_sem[i],
                                                          &ext_sem_desc));
             if (ret < 0) {
 #ifndef _WIN32
@@ -3199,7 +3202,8 @@ static int vulkan_transfer_data_from_cuda(AVHWFramesContext *hwfc,
         s_s_par[i].params.fence.value = dst_f->sem_value[i] + 1;
     }
 
-    err = CHECK_CU(cu->cuWaitExternalSemaphoresAsync(dst_int->cu_sem, s_w_par,
+    err = cu->cuWaitExternalSemaphoresAsync == NULL ? -1 :
+          CHECK_CU(cu->cuWaitExternalSemaphoresAsync(dst_int->cu_sem, s_w_par,
                                                      planes, cuda_dev->stream));
     if (err < 0)
         goto fail;
@@ -3226,7 +3230,8 @@ static int vulkan_transfer_data_from_cuda(AVHWFramesContext *hwfc,
             goto fail;
     }
 
-    err = CHECK_CU(cu->cuSignalExternalSemaphoresAsync(dst_int->cu_sem, s_s_par,
+    err = cu->cuSignalExternalSemaphoresAsync == NULL ? -1 :
+          CHECK_CU(cu->cuSignalExternalSemaphoresAsync(dst_int->cu_sem, s_s_par,
                                                        planes, cuda_dev->stream));
     if (err < 0)
         goto fail;
@@ -4044,7 +4049,8 @@ static int vulkan_transfer_data_to_cuda(AVHWFramesContext *hwfc, AVFrame *dst,
         s_s_par[i].params.fence.value = dst_f->sem_value[i] + 1;
     }
 
-    err = CHECK_CU(cu->cuWaitExternalSemaphoresAsync(dst_int->cu_sem, s_w_par,
+    err = cu->cuWaitExternalSemaphoresAsync == NULL ? -1 :
+          CHECK_CU(cu->cuWaitExternalSemaphoresAsync(dst_int->cu_sem, s_w_par,
                                                      planes, cuda_dev->stream));
     if (err < 0)
         goto fail;
