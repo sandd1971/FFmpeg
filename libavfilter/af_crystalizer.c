@@ -206,10 +206,10 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     td.s = (const void **)in->extended_data;
     td.p = (void **)s->prev->extended_data;
     td.nb_samples = in->nb_samples;
-    td.channels = in->channels;
+    td.channels = in->ch_layout.nb_channels;
     td.mult = ctx->is_disabled ? 0.f : s->mult;
     ff_filter_execute(ctx, s->filter[td.mult >= 0.f][s->clip], &td, NULL,
-                      FFMIN(inlink->channels, ff_filter_get_nb_threads(ctx)));
+                      FFMIN(inlink->ch_layout.nb_channels, ff_filter_get_nb_threads(ctx)));
 
     if (out != in)
         av_frame_free(&in);
@@ -222,18 +222,6 @@ static av_cold void uninit(AVFilterContext *ctx)
     CrystalizerContext *s = ctx->priv;
 
     av_frame_free(&s->prev);
-}
-
-static int process_command(AVFilterContext *ctx, const char *cmd, const char *args,
-                           char *res, int res_len, int flags)
-{
-    int ret;
-
-    ret = ff_filter_process_command(ctx, cmd, args, res, res_len, flags);
-    if (ret < 0)
-        return ret;
-
-    return config_input(ctx->inputs[0]);
 }
 
 static const AVFilterPad inputs[] = {
@@ -262,7 +250,7 @@ const AVFilter ff_af_crystalizer = {
     FILTER_OUTPUTS(outputs),
     FILTER_SAMPLEFMTS(AV_SAMPLE_FMT_FLT, AV_SAMPLE_FMT_FLTP,
                       AV_SAMPLE_FMT_DBL, AV_SAMPLE_FMT_DBLP),
-    .process_command = process_command,
+    .process_command = ff_filter_process_command,
     .flags          = AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL |
                       AVFILTER_FLAG_SLICE_THREADS,
 };

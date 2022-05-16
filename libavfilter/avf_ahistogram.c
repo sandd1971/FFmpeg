@@ -127,7 +127,7 @@ static int config_input(AVFilterLink *inlink)
     AudioHistogramContext *s = ctx->priv;
 
     s->nb_samples = FFMAX(1, av_rescale(inlink->sample_rate, s->frame_rate.den, s->frame_rate.num));
-    s->dchannels = s->dmode == SINGLE ? 1 : inlink->channels;
+    s->dchannels = s->dmode == SINGLE ? 1 : inlink->ch_layout.nb_channels;
     s->shistogram = av_calloc(s->w, s->dchannels * sizeof(*s->shistogram));
     if (!s->shistogram)
         return AVERROR(ENOMEM);
@@ -167,6 +167,7 @@ static int config_output(AVFilterLink *outlink)
     outlink->h = s->h;
     outlink->sample_aspect_ratio = (AVRational){1,1};
     outlink->frame_rate = s->frame_rate;
+    outlink->time_base = av_inv_q(outlink->frame_rate);
 
     s->histogram_h = s->h * s->phisto;
     s->ypos = s->h * s->phisto;
@@ -243,13 +244,13 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
         memset(s->out->data[2] + n * s->out->linesize[0], 127, w);
         memset(s->out->data[3] + n * s->out->linesize[0], 0, w);
     }
-    s->out->pts = in->pts;
+    s->out->pts = av_rescale_q(in->pts, inlink->time_base, outlink->time_base);
 
     s->first = s->frame_count;
 
     switch (s->ascale) {
     case ALINEAR:
-        for (c = 0; c < inlink->channels; c++) {
+        for (c = 0; c < inlink->ch_layout.nb_channels; c++) {
             const float *src = (const float *)in->extended_data[c];
             uint64_t *achistogram = &s->achistogram[(s->dmode == SINGLE ? 0: c) * w];
 
@@ -272,7 +273,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
         }
         break;
     case ALOG:
-        for (c = 0; c < inlink->channels; c++) {
+        for (c = 0; c < inlink->ch_layout.nb_channels; c++) {
             const float *src = (const float *)in->extended_data[c];
             uint64_t *achistogram = &s->achistogram[(s->dmode == SINGLE ? 0: c) * w];
 
@@ -400,7 +401,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
 
         if (s->slide == SCROLL) {
             for (p = 0; p < 4; p++) {
-                for (y = s->h; y >= H + 1; y--) {
+                for (y = s->h - 1; y >= H + 1; y--) {
                     memmove(s->out->data[p] + (y  ) * s->out->linesize[p],
                             s->out->data[p] + (y-1) * s->out->linesize[p], w);
                 }

@@ -28,8 +28,8 @@
 #include "libavutil/internal.h"
 #include "avcodec.h"
 #include "codec_id.h"
+#include "codec_internal.h"
 #include "encode.h"
-#include "internal.h"
 
 typedef struct {
     int fq, q, s, lt;
@@ -93,7 +93,7 @@ static int dfpwm_enc_frame(struct AVCodecContext *ctx, struct AVPacket *packet,
     const struct AVFrame *frame, int *got_packet)
 {
     DFPWMState *state = ctx->priv_data;
-    int size = frame->nb_samples * frame->channels / 8 + (frame->nb_samples % 8 > 0 ? 1 : 0);
+    int size = frame->nb_samples * frame->ch_layout.nb_channels / 8 + (frame->nb_samples % 8 > 0 ? 1 : 0);
     int ret = ff_get_encode_buffer(ctx, packet, size, 0);
 
     if (ret) {
@@ -107,15 +107,15 @@ static int dfpwm_enc_frame(struct AVCodecContext *ctx, struct AVPacket *packet,
     return 0;
 }
 
-const AVCodec ff_dfpwm_encoder = {
-    .name            = "dfpwm",
-    .long_name       = NULL_IF_CONFIG_SMALL("DFPWM1a audio"),
-    .type            = AVMEDIA_TYPE_AUDIO,
-    .id              = AV_CODEC_ID_DFPWM,
+const FFCodec ff_dfpwm_encoder = {
+    .p.name          = "dfpwm",
+    .p.long_name     = NULL_IF_CONFIG_SMALL("DFPWM1a audio"),
+    .p.type          = AVMEDIA_TYPE_AUDIO,
+    .p.id            = AV_CODEC_ID_DFPWM,
     .priv_data_size  = sizeof(DFPWMState),
     .init            = dfpwm_enc_init,
-    .encode2         = dfpwm_enc_frame,
-    .sample_fmts     = (const enum AVSampleFormat[]){AV_SAMPLE_FMT_U8, AV_SAMPLE_FMT_NONE},
-    .capabilities    = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_VARIABLE_FRAME_SIZE,
+    FF_CODEC_ENCODE_CB(dfpwm_enc_frame),
+    .p.sample_fmts   = (const enum AVSampleFormat[]){AV_SAMPLE_FMT_U8, AV_SAMPLE_FMT_NONE},
+    .p.capabilities  = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_VARIABLE_FRAME_SIZE,
     .caps_internal   = FF_CODEC_CAP_INIT_THREADSAFE,
 };
