@@ -811,7 +811,7 @@ static int qsv_frames_derive_from(AVHWFramesContext *dst_ctx,
             D3D11_TEXTURE2D_DESC texDesc;
             dst_ctx->initial_pool_size = src_ctx->initial_pool_size;
             AVD3D11VAFramesContext *dst_hwctx = dst_ctx->hwctx;
-            mfxHDLPair *pair = (mfxHDLPair*)src_hwctx->surfaces[i].Data.MemId;
+            dst_hwctx->texture_infos = av_calloc(src_hwctx->nb_surfaces,
                                                  sizeof(*dst_hwctx->texture_infos));
             if (!dst_hwctx->texture_infos)
                 return AVERROR(ENOMEM);
