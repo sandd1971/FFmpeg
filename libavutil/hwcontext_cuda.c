@@ -482,7 +482,7 @@ static int cuda_device_derive(AVHWDeviceContext *device_ctx,
         goto error;
     }
 
-    if (!src_uuid || !cu->cuDeviceGetUuid) {
+    if (!src_uuid) {
         av_log(device_ctx, AV_LOG_ERROR,
                "Failed to get UUID of source device.\n");
         ret = AVERROR(EINVAL);
@@ -512,7 +512,8 @@ static int cuda_device_derive(AVHWDeviceContext *device_ctx,
         if (ret < 0)
             goto error;
 
-        ret = CHECK_CU(cu->cuDeviceGetUuid(&uuid, dev));
+        ret = cu->cuDeviceGetUuid == NULL ? -1 :
+              CHECK_CU(cu->cuDeviceGetUuid(&uuid, dev));
         if (ret < 0)
             goto error;
 
