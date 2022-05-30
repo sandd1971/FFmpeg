@@ -1601,8 +1601,8 @@ static int vulkan_device_derive(AVHWDeviceContext *ctx,
         AVCUDADeviceContextInternal *cu_internal = src_hwctx->internal;
         CudaFunctions *cu = cu_internal->cuda_dl;
 
-        int ret = CHECK_CU(cu->cuDeviceGetUuid((CUuuid *)&dev_select.uuid,
-                                               cu_internal->cuda_device));
+        int ret = cu->cuDeviceGetUuid == NULL ? -1 :
+            CHECK_CU(cu->cuDeviceGetUuid((CUuuid *)&dev_select.uuid, cu_internal->cuda_device));
         if (ret < 0) {
             av_log(ctx, AV_LOG_ERROR, "Unable to get UUID from CUDA!\n");
             return AVERROR_EXTERNAL;
@@ -4077,7 +4077,8 @@ static int vulkan_transfer_data_to_cuda(AVHWFramesContext *hwfc, AVFrame *dst,
             goto fail;
     }
 
-    err = CHECK_CU(cu->cuSignalExternalSemaphoresAsync(dst_int->cu_sem, s_s_par,
+    err = cu->cuSignalExternalSemaphoresAsync == NULL ? -1 :
+          CHECK_CU(cu->cuSignalExternalSemaphoresAsync(dst_int->cu_sem, s_s_par,
                                                        planes, cuda_dev->stream));
     if (err < 0)
         goto fail;
