@@ -45,9 +45,11 @@ static const enum AVPixelFormat supported_formats[] = {
     AV_PIX_FMT_YUV444P,
     AV_PIX_FMT_P010,
     AV_PIX_FMT_P016,
+    AV_PIX_FMT_YUV444P16,
+    AV_PIX_FMT_YUV420P10,
+    AV_PIX_FMT_YUV422P10,
     AV_PIX_FMT_YUV420P16,
     AV_PIX_FMT_YUV422P16,
-    AV_PIX_FMT_YUV444P16,
 };
 
 struct thumb_frame {
@@ -242,6 +244,15 @@ static int thumbnail(AVFilterContext *ctx, int *histogram, AVFrame *in)
         thumbnail_kernel(ctx, s->cu_func_ushort2, 2,
             histogram + 256, in->data[1], in->width / 2, in->height / 2, in->linesize[1], 2);
         break;
+    case AV_PIX_FMT_YUV444P16:
+        thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
+            histogram, in->data[0], in->width, in->height, in->linesize[0], 2);
+        thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
+            histogram + 256, in->data[1], in->width, in->height, in->linesize[1], 2);
+        thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
+            histogram + 512, in->data[2], in->width, in->height, in->linesize[2], 2);
+        break;
+    case AV_PIX_FMT_YUV420P10:
     case AV_PIX_FMT_YUV420P16:
         thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
             histogram, in->data[0], in->width, in->height, in->linesize[0], 2);
@@ -250,6 +261,7 @@ static int thumbnail(AVFilterContext *ctx, int *histogram, AVFrame *in)
         thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
             histogram + 512, in->data[2], in->width / 2, in->height / 2, in->linesize[2], 2);
         break;
+    case AV_PIX_FMT_YUV422P10:
     case AV_PIX_FMT_YUV422P16:
         thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
             histogram, in->data[0], in->width, in->height, in->linesize[0], 2);
@@ -257,14 +269,6 @@ static int thumbnail(AVFilterContext *ctx, int *histogram, AVFrame *in)
             histogram + 256, in->data[1], in->width / 2, in->height, in->linesize[1], 2);
         thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
             histogram + 512, in->data[2], in->width / 2, in->height, in->linesize[2], 2);
-        break;
-    case AV_PIX_FMT_YUV444P16:
-        thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
-            histogram, in->data[0], in->width, in->height, in->linesize[0], 2);
-        thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
-            histogram + 256, in->data[1], in->width, in->height, in->linesize[1], 2);
-        thumbnail_kernel(ctx, s->cu_func_ushort2, 1,
-            histogram + 512, in->data[2], in->width, in->height, in->linesize[2], 2);
         break;
     default:
         return AVERROR_BUG;
