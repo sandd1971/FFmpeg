@@ -482,7 +482,10 @@ static int uyvyToBGRA_ipp(SwsContext *c, const uint8_t *src[],
     uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
     IppiSize roiSize = { c->srcW, srcSliceH };
 
-    ippiCbYCr422ToBGR_8u_C2C4R(src[0], srcStride[0], dst, dstStride[0], roiSize, 0xff);
+    if (memcmp(c->srcColorspaceTable, ff_yuv2rgb_coeffs[SWS_CS_ITU709], sizeof(c->srcColorspaceTable)))
+        ippiCbYCr422ToBGR_8u_C2C4R(src[0], srcStride[0], dst, dstStride[0], roiSize, 0xff);
+    else
+        ippiCbYCr422ToBGR_709HDTV_8u_C2C4R(src[0], srcStride[0], dst, dstStride[0], roiSize, 0xff);
 
     return srcSliceH;
 }
@@ -543,7 +546,10 @@ static int yuv422pToBGRA_ipp(SwsContext *c, const uint8_t *src[],
     Ipp32s pSrcStep[3] = { srcStride[0], srcStride[1] * 2, srcStride[2] * 2 };
     IppiSize roiSize = { c->srcW, srcSliceH };
 
-    ippiYCbCr420ToBGR_8u_P3C4R(src, pSrcStep, dst, dstStride[0], roiSize, 0xff);
+    if (memcmp(c->srcColorspaceTable, ff_yuv2rgb_coeffs[SWS_CS_ITU709], sizeof(c->srcColorspaceTable)))
+        ippiYCbCr420ToBGR_8u_P3C4R(src, pSrcStep, dst, dstStride[0], roiSize, 0xff);
+    else
+        ippiYCbCr420ToBGR_709HDTV_8u_P3C4R(src, pSrcStep, dst, dstStride[0], roiSize, 0xff);
 
     return srcSliceH;
 }
@@ -601,7 +607,10 @@ static int yuv420pToBGRA_ipp(SwsContext *c, const uint8_t *src[],
     uint8_t *dst = dstParam[0] + dstStride[0] * srcSliceY;
     IppiSize roiSize = { c->srcW, srcSliceH };
 
-    ippiYCbCr420ToBGR_8u_P3C4R(src, srcStride, dst, dstStride[0], roiSize, 0xff);
+    if (memcmp(c->srcColorspaceTable, ff_yuv2rgb_coeffs[SWS_CS_ITU709], sizeof(c->srcColorspaceTable)))
+        ippiYCbCr420ToBGR_8u_P3C4R(src, srcStride, dst, dstStride[0], roiSize, 0xff);
+    else
+        ippiYCbCr420ToBGR_709HDTV_8u_P3C4R(src, srcStride, dst, dstStride[0], roiSize, 0xff);
 
     return srcSliceH;
 }
@@ -1282,7 +1291,7 @@ void ff_get_unscaled_swscale_ipp(SwsContext *c)
     const enum AVPixelFormat srcFormat = c->srcFormat;
     const enum AVPixelFormat dstFormat = c->dstFormat;
     SwsFunc oldConvertFunc = c->convert_unscaled;
-    if (srcFormat == dstFormat ||
+    if (srcFormat == dstFormat || srcFormat == AV_PIX_FMT_BGRA || srcFormat == AV_PIX_FMT_BGR0 ||
         (srcFormat == AV_PIX_FMT_YUV420P && dstFormat == AV_PIX_FMT_YUVA420P) ||
         (srcFormat == AV_PIX_FMT_YUVA420P && dstFormat == AV_PIX_FMT_YUV420P))
         return;
