@@ -120,11 +120,11 @@ static void compute_texture_rect(AVFormatContext *s)
         }
     } else {
         if (sar.num > sar.den) {
-            texture_rect->w = codecpar->width;
-            texture_rect->h = av_rescale(texture_rect->w, dar.den, dar.num);
-        } else {
             texture_rect->h = codecpar->height;
             texture_rect->w = av_rescale(texture_rect->h, dar.num, dar.den);
+        } else {
+            texture_rect->w = codecpar->width;
+            texture_rect->h = av_rescale(texture_rect->w, dar.den, dar.num);
         }
         sdl->window_width  = texture_rect->w;
         sdl->window_height = texture_rect->h;
