@@ -3011,6 +3011,8 @@ int av_parser_parse2(AVCodecParserContext *s,
                      int64_t pts, int64_t dts,
                      int64_t pos);
 
+int av_parser_split(AVCodecParserContext *s,AVCodecContext *avctx, const uint8_t *buf, int buf_size);
+
 void av_parser_close(AVCodecParserContext *s);
 
 /**

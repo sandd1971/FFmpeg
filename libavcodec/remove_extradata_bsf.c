@@ -28,6 +28,7 @@
 #include "hevc.h"
 #include "startcode.h"
 #include "vc1_common.h"
+#include "avcodec.h"
 
 enum RemoveFreq {
     REMOVE_FREQ_KEYFRAME,
@@ -225,6 +226,43 @@ static int remove_extradata(AVBSFContext *ctx, AVPacket *pkt)
     }
 
     return 0;
+}
+
+int av_parser_split(AVCodecParserContext *s, AVCodecContext *avctx, const uint8_t *buf, int buf_size)
+{
+    int i = 0;
+
+    if (s && s->parser && s->parser->split)
+        return s->parser->split(avctx, buf, buf_size);
+
+    switch (avctx->codec_id) {
+    case AV_CODEC_ID_AV1:
+        i = av1_split(buf, buf_size, avctx);
+        break;
+    case AV_CODEC_ID_AVS2:
+    case AV_CODEC_ID_AVS3:
+    case AV_CODEC_ID_CAVS:
+    case AV_CODEC_ID_MPEG4:
+        i = mpeg4video_split(buf, buf_size);
+        break;
+    case AV_CODEC_ID_H264:
+        i = h264_split(buf, buf_size);
+        break;
+    case AV_CODEC_ID_HEVC:
+        i = hevc_split(buf, buf_size);
+        break;
+    case AV_CODEC_ID_MPEG1VIDEO:
+    case AV_CODEC_ID_MPEG2VIDEO:
+        i = mpegvideo_split(buf, buf_size);
+        break;
+    case AV_CODEC_ID_VC1:
+        i = vc1_split(buf, buf_size);
+        break;
+    default:
+        i = 0;
+    }
+
+    return i;
 }
 
 #define OFFSET(x) offsetof(RemoveExtradataContext, x)
