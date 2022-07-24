@@ -3945,18 +3945,23 @@ static int getFramerateIndex(double fps)
     if (selIndex >= 0 && selIndex < _countof(g_standardFramerate))
         return selIndex;
 
-    return 1;
+    return -1;
+}
+
+static int isValidFramerate(double fps)
+{
+    if (fps >= av_q2d(g_standardFramerate[0]) &&
+        fps <= av_q2d(g_standardFramerate[_countof(g_standardFramerate)-1]))
+        return 1;
+
+    return 0;
 }
 
 static int miscNormalizeFramerate(double fps, int* num, int* den)
 {
     int nFmt = getFramerateIndex(fps);
     if (nFmt < 0 || nFmt >= _countof(g_standardFramerate))
-    {
-        *num = 25;
-        *den = 1;
         return 0;
-    }
 
     *num = g_standardFramerate[nFmt].num;
     *den = g_standardFramerate[nFmt].den;
@@ -4345,15 +4350,17 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
     if (mov->normalize_frame_rate && st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && sti->nb_index_entries > 0) {
         int64_t min_duration = 0;
         int64_t max_duration = 0;
-        int64_t avg_duration = 0;
+        int64_t total_duration = 0;
         for (i = 1; i < sti->nb_index_entries; i++) {
             int64_t cur_duration = sti->index_entries[i].timestamp - sti->index_entries[i - 1].timestamp;
             if (cur_duration > 0) {
-                if (cur_duration < min_duration || min_duration == 0)
+                if ((cur_duration < min_duration || min_duration == 0) &&
+                    isValidFramerate(1 / (cur_duration * av_q2d(st->time_base))))
                     min_duration = cur_duration;
-                if (cur_duration > max_duration || max_duration == 0)
+                if ((cur_duration > max_duration || max_duration == 0) &&
+                    isValidFramerate(1 / (cur_duration * av_q2d(st->time_base))))
                     max_duration = cur_duration;
-                avg_duration += cur_duration;
+                total_duration += cur_duration;
             }
         }
         st->event_flags &= ~(AVSTREAM_EVENT_FLAG_CFR | AVSTREAM_EVENT_FLAG_VFR);
@@ -4361,19 +4368,45 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
             AVRational fps_max;
             AVRational fps_min;
             AVRational fps_avg;
-            if (sti->nb_index_entries > 1)
-                avg_duration = llround(avg_duration * 1.0 / (sti->nb_index_entries - 1));
-            miscNormalizeFramerate(1 / (min_duration * av_q2d(st->time_base)), &fps_max.num, &fps_max.den);
-            miscNormalizeFramerate(1 / (max_duration * av_q2d(st->time_base)), &fps_min.num, &fps_min.den);
-            miscNormalizeFramerate(1 / (avg_duration * av_q2d(st->time_base)), &fps_avg.num, &fps_avg.den);
+            if (!miscNormalizeFramerate((sti->nb_index_entries - 1) / (total_duration * av_q2d(st->time_base)),
+                &fps_avg.num, &fps_avg.den))
+                fps_avg = (AVRational){25, 1};
+            if (!miscNormalizeFramerate(1 / (min_duration * av_q2d(st->time_base)), &fps_max.num, &fps_max.den))
+                fps_max = fps_avg;
+            if (!miscNormalizeFramerate(1 / (max_duration * av_q2d(st->time_base)), &fps_min.num, &fps_min.den))
+                fps_min = fps_avg;
             if (fabs(av_q2d(fps_max) - av_q2d(fps_min)) < 0.1)
                 st->event_flags |= AVSTREAM_EVENT_FLAG_CFR;
             else
                 st->event_flags |= AVSTREAM_EVENT_FLAG_VFR;
-            if (fabs(av_q2d(fps_max) - av_q2d(fps_avg)) < 1.001)
-                st->r_frame_rate = fps_avg;
-            else
+            if (av_q2d(fps_max) >= av_q2d(fps_avg) + 1.001 &&
+                av_q2d(fps_max) < 2 * av_q2d(fps_avg))
                 st->r_frame_rate = fps_max;
+            else
+                st->r_frame_rate = fps_avg;
+
+            if (sti->nb_index_entries > 1) {
+                AVRational _27mhz = { 1, 27000000 };
+                int64_t field_step = av_rescale(_27mhz.den, st->r_frame_rate.den, st->r_frame_rate.num * 2);
+                int64_t current_timestamp = av_rescale_q(sti->index_entries[0].timestamp, st->time_base, _27mhz);
+                sti->index_entries[0].timestamp = av_rescale_q(current_timestamp, _27mhz, st->time_base);
+                for (i = 1; i < sti->nb_index_entries; i++) {
+                    int64_t target_timestamp = av_rescale_q(sti->index_entries[i].timestamp, st->time_base, _27mhz);
+                    for (int field = 0; field < 4; field++) {
+                        current_timestamp += field_step;
+                        if (current_timestamp > target_timestamp - field_step / 2)
+                            break;
+                    }
+                    sti->index_entries[i].timestamp = av_rescale_q(current_timestamp, _27mhz, st->time_base);
+                }
+                st->duration = av_rescale_q(st->duration, st->time_base, _27mhz);
+                for (int field = 0; field < 4; field++) {
+                    current_timestamp += field_step;
+                    if (current_timestamp > st->duration - field_step / 2)
+                        break;
+                }
+                st->duration = av_rescale_q(current_timestamp, _27mhz, st->time_base);
+            }
         }
     }
 }
