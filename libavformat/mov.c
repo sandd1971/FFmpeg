@@ -4385,13 +4385,17 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
             else
                 st->r_frame_rate = fps_avg;
 
-            if (sti->nb_index_entries > 1) {
+/*            if (sti->nb_index_entries > 1) {
                 AVRational _27mhz = { 1, 27000000 };
                 int64_t field_step = av_rescale(_27mhz.den, st->r_frame_rate.den, st->r_frame_rate.num * 2);
                 int64_t current_timestamp = av_rescale_q(sti->index_entries[0].timestamp, st->time_base, _27mhz);
                 sti->index_entries[0].timestamp = av_rescale_q(current_timestamp, _27mhz, st->time_base);
                 for (i = 1; i < sti->nb_index_entries; i++) {
                     int64_t target_timestamp = av_rescale_q(sti->index_entries[i].timestamp, st->time_base, _27mhz);
+                    if (llabs(target_timestamp - current_timestamp) >= _27mhz.den * 2) {
+                        current_timestamp = target_timestamp;
+                        continue;
+                    }
                     for (int field = 0; field < 4; field++) {
                         current_timestamp += field_step;
                         if (current_timestamp > target_timestamp - field_step / 2)
@@ -4406,7 +4410,7 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
                         break;
                 }
                 st->duration = av_rescale_q(current_timestamp, _27mhz, st->time_base);
-            }
+            }*/
         }
     }
 }
