@@ -4413,6 +4413,43 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
             }*/
         }
     }
+
+    if (!mov->check_timestamp)
+        return;
+
+    if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && sti->nb_index_entries > 0) {
+        int error_count = 0;
+        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_VIDEOTS;
+        for (i = 1; i < sti->nb_index_entries; i++) {
+            int64_t cur_duration = sti->index_entries[i].timestamp - sti->index_entries[i - 1].timestamp;
+            if (cur_duration * av_q2d(st->time_base) < 0.001 || cur_duration * av_q2d(st->time_base) > 1) {
+                error_count++;
+                if (error_count > 10) {
+                    st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_VIDEOTS;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && sti->nb_index_entries > 0) {
+        int error_count = 0;
+        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_AUDIOTS;
+        for (i = 1; i < sti->nb_index_entries; i++) {
+            double duration = av_get_audio_frame_duration2(st->codecpar, sti->index_entries[i - 1].size) * 1.0 / st->codecpar->sample_rate;
+            if (duration > 0) {
+                double calc_timestamp = sti->index_entries[i - 1].timestamp * av_q2d(st->time_base) + duration;
+                double real_timestamp = sti->index_entries[i].timestamp * av_q2d(st->time_base);
+                if (real_timestamp < calc_timestamp - 2 * duration || real_timestamp > calc_timestamp + 2 * duration) {
+                    error_count++;
+                    if (error_count > 10) {
+                        st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_AUDIOTS;
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
 
 static int test_same_origin(const char *src, const char *ref) {
@@ -9153,10 +9190,8 @@ static const AVOption mov_options[] = {
     { "enable_drefs", "Enable external track support.", OFFSET(enable_drefs), AV_OPT_TYPE_BOOL,
         {.i64 = 0}, 0, 1, FLAGS },
     { "max_stts_delta", "treat offsets above this value as invalid", OFFSET(max_stts_delta), AV_OPT_TYPE_INT, {.i64 = UINT_MAX-48000*10 }, 0, UINT_MAX, .flags = AV_OPT_FLAG_DECODING_PARAM },
-    {"normalize_frame_rate",
-        "Normalize the real base framerate of the video stream",
-        OFFSET(normalize_frame_rate), AV_OPT_TYPE_BOOL, {.i64 = 0},
-        0, 1, FLAGS},
+    { "normalize_frame_rate", "Normalize the real base framerate of the video stream", OFFSET(normalize_frame_rate), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, FLAGS},
+    { "check_timestamp", "check the abnormal timestamp of the video/audio stream", OFFSET(check_timestamp), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, FLAGS},
 
     { NULL },
 };
