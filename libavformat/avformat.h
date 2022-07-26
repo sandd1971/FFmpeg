@@ -1090,8 +1090,7 @@ typedef struct AVStream {
 
 #define AVSTREAM_EVENT_FLAG_VFR (1 << 31)
 #define AVSTREAM_EVENT_FLAG_CFR (1 << 30)
-#define AVSTREAM_EVENT_FLAG_ABNORMAL_VIDEOTS (1 << 29)
-#define AVSTREAM_EVENT_FLAG_ABNORMAL_AUDIOTS (1 << 28)
+#define AVSTREAM_EVENT_FLAG_ABNORMAL_TS (1 << 29)
 
     /**
      * Real base framerate of the stream.

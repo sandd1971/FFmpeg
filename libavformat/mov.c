@@ -4419,13 +4419,13 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
 
     if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && sti->nb_index_entries > 0) {
         int error_count = 0;
-        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_VIDEOTS;
+        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
         for (i = 1; i < sti->nb_index_entries; i++) {
             int64_t cur_duration = sti->index_entries[i].timestamp - sti->index_entries[i - 1].timestamp;
             if (cur_duration * av_q2d(st->time_base) < 0.001 || cur_duration * av_q2d(st->time_base) > 1) {
                 error_count++;
                 if (error_count > 10) {
-                    st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_VIDEOTS;
+                    st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
                     break;
                 }
             }
@@ -4434,7 +4434,7 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
 
     if (st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && sti->nb_index_entries > 0) {
         int error_count = 0;
-        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_AUDIOTS;
+        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
         for (i = 1; i < sti->nb_index_entries; i++) {
             double duration = av_get_audio_frame_duration2(st->codecpar, sti->index_entries[i - 1].size) * 1.0 / st->codecpar->sample_rate;
             if (duration > 0) {
@@ -4443,7 +4443,7 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
                 if (real_timestamp < calc_timestamp - 2 * duration || real_timestamp > calc_timestamp + 2 * duration) {
                     error_count++;
                     if (error_count > 10) {
-                        st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_AUDIOTS;
+                        st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
                         break;
                     }
                 }
