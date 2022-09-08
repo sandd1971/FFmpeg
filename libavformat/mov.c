@@ -4380,7 +4380,7 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
             else
                 st->event_flags |= AVSTREAM_EVENT_FLAG_VFR;
             if (av_q2d(fps_max) >= av_q2d(fps_avg) + 1.001 &&
-                av_q2d(fps_max) < 2 * av_q2d(fps_avg))
+                av_q2d(fps_max) <= 2.5 * av_q2d(fps_avg))
                 st->r_frame_rate = fps_max;
             else
                 st->r_frame_rate = fps_avg;
