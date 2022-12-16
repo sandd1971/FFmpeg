@@ -164,7 +164,11 @@ static void tonemap(TonemapContext *s, AVFrame *out, const AVFrame *in,
         sig = av_clipf(sig * s->param, 0, 1.0f);
         break;
     case TONEMAP_HABLE:
-        sig = hable(sig) / hable(peak);
+        //sig = hable(sig) / hable(peak);
+        *r_out = hable(*r_in) / hable(4.8);
+        *g_out = hable(*g_in) / hable(4.8);
+        *b_out = hable(*b_in) / hable(4.8);
+        return;
         break;
     case TONEMAP_REINHARD:
         sig = sig / (sig + s->param) * (peak + s->param) / peak;
