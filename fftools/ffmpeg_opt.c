@@ -172,7 +172,8 @@ int print_stats       = -1;
 int qp_hist           = 0;
 int stdin_interaction = 1;
 float max_error_rate  = 2.0/3;
-char *filter_nbthreads;
+char *filter_nbthreads = NULL;
+char *filter_use_ipp = NULL;
 int filter_complex_nbthreads = 0;
 int vstats_version = 2;
 int auto_conversion_filters = 1;
@@ -269,6 +270,13 @@ static int opt_filter_threads(void *optctx, const char *opt, const char *arg)
 {
     av_free(filter_nbthreads);
     filter_nbthreads = av_strdup(arg);
+    return 0;
+}
+
+static int opt_filter_use_ipp(void *optctx, const char *opt, const char *arg)
+{
+    av_free(filter_use_ipp);
+    filter_use_ipp = av_strdup(arg);
     return 0;
 }
 
@@ -3913,5 +3921,7 @@ const OptionDef options[] = {
     { "filter_hw_device", HAS_ARG | OPT_EXPERT, { .func_arg = opt_filter_hw_device },
         "set hardware device used when filtering", "device" },
 
+    { "filter_use_ipp", HAS_ARG, { .func_arg = opt_filter_use_ipp },
+         "Use Intel(R) Integrated Performance Primitives" },
     { NULL, },
 };

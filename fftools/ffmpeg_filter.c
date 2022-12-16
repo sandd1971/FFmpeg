@@ -1016,6 +1016,12 @@ int configure_filtergraph(FilterGraph *fg)
                 av_opt_set(fg->graph, "threads", e->value, 0);
         }
 
+        if (filter_use_ipp) {
+            ret = av_opt_set(fg->graph, "use_ipp", filter_use_ipp, 0);
+            if (ret < 0)
+                goto fail;
+        }
+
         args[0] = 0;
         e       = NULL;
         while ((e = av_dict_get(ost->sws_dict, "", e,

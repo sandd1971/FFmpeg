@@ -637,6 +637,7 @@ extern AVIOContext *progress_avio;
 extern float max_error_rate;
 
 extern char *filter_nbthreads;
+extern char *filter_use_ipp;
 extern int filter_complex_nbthreads;
 extern int vstats_version;
 extern int auto_conversion_filters;
