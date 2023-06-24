@@ -23,7 +23,7 @@
 
 %include "libavutil/x86/x86util.asm"
 
-SECTION_RODATA
+SECTION_RODATA 32
 
 pb_1:     times 32 db 1
 pw_128:   times 16 dw 128
