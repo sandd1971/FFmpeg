@@ -306,8 +306,11 @@ static av_cold int nvenc_load_libraries(AVCodecContext *avctx)
 #ifdef _WIN64
     if (dl_fn && dl_fn->nvenc_dl && dl_fn->nvenc_dl->lib) {
         current_ref = InterlockedIncrement(&g_encodeapi_ref);
-        if (current_ref == 1)
+        if (current_ref == 1) {
+            FFNV_LOAD_FUNC("nvEncodeAPI64.dll");
+            InterlockedIncrement(&g_encodeapi_ref);
             InitializeCriticalSection(&g_encodeapi_cs);
+        }
     }
 #endif
 
