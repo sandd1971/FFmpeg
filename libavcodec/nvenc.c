@@ -340,47 +340,26 @@ static av_cold int nvenc_load_libraries(AVCodecContext *avctx)
         EnterCriticalSection(&g_encodeapi_cs);
         MODULEINFO mi = { 0 };
         if (GetModuleInformation(GetCurrentProcess(), (HMODULE)dl_fn->nvenc_dl->lib, &mi, sizeof(MODULEINFO))) {
-            uint8_t* pfunc = (uint8_t*)dl_fn->nvenc_funcs.nvEncOpenEncodeSessionEx;
-            if (pfunc > (const uint8_t*)mi.lpBaseOfDll && pfunc < (const uint8_t*)mi.lpBaseOfDll + mi.SizeOfImage) {
-                while (pfunc[0] == 0xE9 &&
-                    pfunc > (const uint8_t*)mi.lpBaseOfDll &&
-                    pfunc + 5 <= (const uint8_t*)mi.lpBaseOfDll + mi.SizeOfImage) {
-                    const uint32_t* pjump = (const uint32_t*)(pfunc + 1);
-                    pfunc += *pjump;
-                    pfunc += 5;
+            uint8_t* pfunc = (uint8_t*)mi.lpBaseOfDll;
+            uint8_t* targetAddr = NULL;
+            int foundCount = 0;
+            while (pfunc + sizeofPatch < (const uint8_t*)mi.lpBaseOfDll + mi.SizeOfImage) {
+                if (memcmp(pfunc, bytesSch, sizeofPatch) == 0) {
+                    foundCount++;
+                    pfunc += sizeofPatch;
+                    if (targetAddr == NULL)
+                        targetAddr = pfunc;
+                } else {
+                    pfunc++;
                 }
+            }
 
-                if (pfunc[0] != 0xE9) {
-                    size_t msize = mi.SizeOfImage - (pfunc - (const uint8_t*)mi.lpBaseOfDll);
-                    uint8_t* targetAddr = NULL;
-                    int foundCount = 0;
-                    while (msize > sizeofPatch &&
-                        pfunc > (const uint8_t*)mi.lpBaseOfDll &&
-                        pfunc < (const uint8_t*)mi.lpBaseOfDll + mi.SizeOfImage) {
-                        if (pfunc[0] == 0xC3 || pfunc[0] == 0xCB || pfunc[0] == 0xC2 || pfunc[0] == 0xCA)
-                            break;
-
-                        int opLen = InstructionSize_x86_64(pfunc, msize);
-                        if (opLen <= 0)
-                            break;
-                        if (memcmp(pfunc, bytesSch, sizeofPatch) == 0) {
-                            foundCount++;
-                            if (targetAddr == NULL)
-                                targetAddr = pfunc;
-                        }
-
-                        pfunc += opLen;
-                        msize -= opLen;
-                    }
-
-                    if (foundCount == 1 && targetAddr != NULL) {
-                        DWORD oldProtect;
-                        if (VirtualProtect(targetAddr, sizeofPatch, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-                            memcpy(targetAddr, bytesRep, sizeofPatch);
-                            VirtualProtect(targetAddr, sizeofPatch, oldProtect, &oldProtect);
-                            av_log(avctx, AV_LOG_INFO, "nvEncodeAPI64.dll patched successfully\n");
-                        }
-                    }
+            if (foundCount == 1 && targetAddr != NULL) {
+                DWORD oldProtect;
+                if (VirtualProtect(targetAddr, sizeofPatch, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+                    memcpy(targetAddr, bytesRep, sizeofPatch);
+                    VirtualProtect(targetAddr, sizeofPatch, oldProtect, &oldProtect);
+                    av_log(avctx, AV_LOG_INFO, "nvEncodeAPI64.dll patched successfully\n");
                 }
             }
         }
