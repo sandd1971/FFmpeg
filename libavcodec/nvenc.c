@@ -42,6 +42,7 @@
 
 static volatile LONG g_encodeapi_ref = 0;
 static CRITICAL_SECTION g_encodeapi_cs;
+static volatile LONG g_nvpatch_pos = -1;
 #endif
 
 #define CHECK_CU(x) FF_CUDA_CHECK_DL(avctx, dl_fn->cuda_dl, x)
@@ -343,18 +344,27 @@ static av_cold int nvenc_load_libraries(AVCodecContext *avctx)
             uint8_t* pfunc = (uint8_t*)mi.lpBaseOfDll;
             uint8_t* targetAddr = NULL;
             int foundCount = 0;
-            while (pfunc + sizeofPatch < (const uint8_t*)mi.lpBaseOfDll + mi.SizeOfImage) {
+            if (g_nvpatch_pos < 0) {
+                while (pfunc + sizeofPatch < (const uint8_t*)mi.lpBaseOfDll + mi.SizeOfImage) {
+                    if (memcmp(pfunc, bytesSch, sizeofPatch) == 0) {
+                        if (targetAddr == NULL)
+                            targetAddr = pfunc;
+                        foundCount++;
+                        pfunc += sizeofPatch;
+                    } else {
+                        pfunc++;
+                    }
+                }
+            } else {
+                pfunc += g_nvpatch_pos;
                 if (memcmp(pfunc, bytesSch, sizeofPatch) == 0) {
-                    foundCount++;
-                    pfunc += sizeofPatch;
-                    if (targetAddr == NULL)
-                        targetAddr = pfunc;
-                } else {
-                    pfunc++;
+                    foundCount = 1;
+                    targetAddr = pfunc;
                 }
             }
 
             if (foundCount == 1 && targetAddr != NULL) {
+                g_nvpatch_pos = targetAddr - (uint8_t*)mi.lpBaseOfDll;
                 DWORD oldProtect;
                 if (VirtualProtect(targetAddr, sizeofPatch, PAGE_EXECUTE_READWRITE, &oldProtect)) {
                     memcpy(targetAddr, bytesRep, sizeofPatch);
