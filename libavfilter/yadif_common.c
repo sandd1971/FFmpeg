@@ -138,6 +138,7 @@ int ff_yadif_filter_frame(AVFilterLink *link, AVFrame *frame)
             return AVERROR(ENOMEM);
 
         av_frame_free(&yadif->prev);
+        yadif->out->interlaced_frame = 0;
         if (yadif->out->pts != AV_NOPTS_VALUE)
             yadif->out->pts *= 2;
         return ff_filter_frame(ctx->outputs[0], yadif->out);
