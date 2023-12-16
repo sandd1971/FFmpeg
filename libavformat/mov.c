@@ -4440,7 +4440,7 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
             if (duration > 0) {
                 double calc_timestamp = sti->index_entries[i - 1].timestamp * av_q2d(st->time_base) + duration;
                 double real_timestamp = sti->index_entries[i].timestamp * av_q2d(st->time_base);
-                if (real_timestamp < calc_timestamp - 2 * duration || real_timestamp > calc_timestamp + 2 * duration) {
+                if (fabs(real_timestamp - calc_timestamp) > 1.0) {
                     error_count++;
                     if (error_count > 10) {
                         st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
