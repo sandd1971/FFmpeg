@@ -397,6 +397,8 @@ void avcodec_flush_buffers(AVCodecContext *avctx)
 
         av_packet_unref(avci->in_pkt);
 
+        avctx->pts_correction_num_faulty_dts =
+        avctx->pts_correction_num_faulty_pts = 0;
         avctx->pts_correction_last_pts =
         avctx->pts_correction_last_dts = INT64_MIN;
 
