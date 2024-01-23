@@ -763,9 +763,10 @@ static void mxf_write_identification(AVFormatContext *s)
     AVDictionaryEntry *com_entry = av_dict_get(s->metadata, "company_name", NULL, 0);
     AVDictionaryEntry *product_entry = av_dict_get(s->metadata, "product_name", NULL, 0);
     AVDictionaryEntry *version_entry = av_dict_get(s->metadata, "product_version", NULL, 0);
+    AVDictionaryEntry *platform_entry = av_dict_get(s->metadata, "platform_name", NULL, 0);
     const char *company = com_entry ? com_entry->value : "FFmpeg";
     const char *product = product_entry ? product_entry->value : s->oformat != &ff_mxf_opatom_muxer ? "OP1a Muxer" : "OPAtom Muxer";
-    const char *platform = s->flags & AVFMT_FLAG_BITEXACT ? "Lavf" : PLATFORM_IDENT;
+    const char *platform = platform_entry ? platform_entry->value : s->flags & AVFMT_FLAG_BITEXACT ? "Lavf" : PLATFORM_IDENT;
     const char *version = version_entry ? version_entry->value :
                               s->flags & AVFMT_FLAG_BITEXACT ? "0.0.0" :
                                   AV_STRINGIFY(LIBAVFORMAT_VERSION);
