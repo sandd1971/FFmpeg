@@ -36,15 +36,6 @@
 #include "internal.h"
 #include "packet_internal.h"
 
-#ifdef _WIN64
-#include <Psapi.h>
-#include "instruction_size.h"
-
-static volatile LONG g_encodeapi_ref = 0;
-static CRITICAL_SECTION g_encodeapi_cs;
-static volatile LONG g_nvpatch_pos = -1;
-#endif
-
 #define CHECK_CU(x) FF_CUDA_CHECK_DL(avctx, dl_fn->cuda_dl, x)
 
 #define NVENC_CAP 0x30
@@ -288,12 +279,6 @@ static av_cold int nvenc_load_libraries(AVCodecContext *avctx)
     NVENCSTATUS err;
     uint32_t nvenc_max_ver;
     int ret;
-#ifdef _WIN64
-    static uint8_t bytesSch[] = { 0x8B, 0xF0, 0x85, 0xC0, 0x75, 0x05, 0x49, 0x89, 0x2F, 0xEB };
-    static uint8_t bytesRep[] = { 0x33, 0xC0, 0x8B, 0xF0, 0x75, 0x05, 0x49, 0x89, 0x2F, 0xEB };
-    static int sizeofPatch = sizeof(bytesSch);
-    int32_t current_ref = 0;
-#endif
 
     ret = cuda_load_functions(&dl_fn->cuda_dl, avctx);
     if (ret < 0)
@@ -304,16 +289,6 @@ static av_cold int nvenc_load_libraries(AVCodecContext *avctx)
         nvenc_print_driver_requirement(avctx, AV_LOG_ERROR);
         return ret;
     }
-#ifdef _WIN64
-    if (dl_fn && dl_fn->nvenc_dl && dl_fn->nvenc_dl->lib) {
-        current_ref = InterlockedIncrement(&g_encodeapi_ref);
-        if (current_ref == 1) {
-            FFNV_LOAD_FUNC("nvEncodeAPI64.dll");
-            InterlockedIncrement(&g_encodeapi_ref);
-            InitializeCriticalSection(&g_encodeapi_cs);
-        }
-    }
-#endif
 
     err = dl_fn->nvenc_dl->NvEncodeAPIGetMaxSupportedVersion(&nvenc_max_ver);
     if (err != NV_ENC_SUCCESS)
@@ -335,47 +310,6 @@ static av_cold int nvenc_load_libraries(AVCodecContext *avctx)
     err = dl_fn->nvenc_dl->NvEncodeAPICreateInstance(&dl_fn->nvenc_funcs);
     if (err != NV_ENC_SUCCESS)
         return nvenc_print_error(avctx, err, "Failed to create nvenc instance");
-
-#ifdef _WIN64
-    if (current_ref >= 1) {
-        EnterCriticalSection(&g_encodeapi_cs);
-        MODULEINFO mi = { 0 };
-        if (GetModuleInformation(GetCurrentProcess(), (HMODULE)dl_fn->nvenc_dl->lib, &mi, sizeof(MODULEINFO))) {
-            uint8_t* pfunc = (uint8_t*)mi.lpBaseOfDll;
-            uint8_t* targetAddr = NULL;
-            int foundCount = 0;
-            if (g_nvpatch_pos < 0) {
-                while (pfunc + sizeofPatch < (const uint8_t*)mi.lpBaseOfDll + mi.SizeOfImage) {
-                    if (memcmp(pfunc, bytesSch, sizeofPatch) == 0) {
-                        if (targetAddr == NULL)
-                            targetAddr = pfunc;
-                        foundCount++;
-                        pfunc += sizeofPatch;
-                    } else {
-                        pfunc++;
-                    }
-                }
-            } else {
-                pfunc += g_nvpatch_pos;
-                if (memcmp(pfunc, bytesSch, sizeofPatch) == 0) {
-                    foundCount = 1;
-                    targetAddr = pfunc;
-                }
-            }
-
-            if (foundCount == 1 && targetAddr != NULL) {
-                g_nvpatch_pos = targetAddr - (uint8_t*)mi.lpBaseOfDll;
-                DWORD oldProtect;
-                if (VirtualProtect(targetAddr, sizeofPatch, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-                    memcpy(targetAddr, bytesRep, sizeofPatch);
-                    VirtualProtect(targetAddr, sizeofPatch, oldProtect, &oldProtect);
-                    av_log(avctx, AV_LOG_INFO, "nvEncodeAPI64.dll patched successfully\n");
-                }
-            }
-        }
-        LeaveCriticalSection(&g_encodeapi_cs);
-    }
-#endif
 
     av_log(avctx, AV_LOG_VERBOSE, "Nvenc initialized successfully\n");
 
@@ -1780,13 +1714,6 @@ av_cold int ff_nvenc_encode_close(AVCodecContext *avctx)
     if (ctx->d3d11_device) {
         ID3D11Device_Release(ctx->d3d11_device);
         ctx->d3d11_device = NULL;
-    }
-#endif
-
-#ifdef _WIN64
-    if (dl_fn && dl_fn->nvenc_dl && dl_fn->nvenc_dl->lib) {
-        if (InterlockedDecrement(&g_encodeapi_ref) == 0)
-            DeleteCriticalSection(&g_encodeapi_cs);
     }
 #endif
 
