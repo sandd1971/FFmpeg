@@ -32,6 +32,7 @@
 #include "libavutil/pixdesc.h"
 #include "libavutil/rational.h"
 #include "libavutil/samplefmt.h"
+#include "libavutil/cpu.h"
 
 #define FF_INTERNAL_FIELDS 1
 #include "framequeue.h"
