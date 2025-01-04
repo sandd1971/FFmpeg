@@ -70,6 +70,10 @@
 
 #include "qtpalette.h"
 
+#ifndef _countof
+#define _countof(_Array) (sizeof(_Array) / sizeof(_Array[0]))
+#endif
+
 /* those functions parse an atom */
 /* links atom IDs to parse functions */
 typedef struct MOVParseTableEntry {
