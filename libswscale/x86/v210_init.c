@@ -21,6 +21,7 @@
 #include "libavutil/attributes.h"
 #include "libavutil/cpu.h"
 #include "libavutil/x86/cpu.h"
+#include "libswscale/v210_codec.h"
 
 extern void ff_v210_decode_unaligned_10_ssse3(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, ptrdiff_t width);
 extern void ff_v210_decode_unaligned_10_avx(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, ptrdiff_t width);
