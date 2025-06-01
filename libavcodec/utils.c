@@ -45,8 +45,6 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#ifndef _DEBUG
-
 void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size)
 {
     uint8_t **p = ptr;
@@ -72,8 +70,6 @@ void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size)
     if (*p)
         memset(*p, 0, min_size + AV_INPUT_BUFFER_PADDING_SIZE);
 }
-
-#endif
 
 int av_codec_is_encoder(const AVCodec *avcodec)
 {
@@ -1170,39 +1166,3 @@ int ff_int_from_list_or_default(void *ctx, const char * val_name, int val,
            "%s %d are not supported. Set to default value : %d\n", val_name, val, default_value);
     return default_value;
 }
-
-#ifdef _DEBUG
-
-#undef av_fast_malloc
-#undef av_fast_mallocz
-
-#undef av_fast_padded_malloc
-#undef av_fast_padded_mallocz
-
-void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size, const char* f, int l)
-{
-    uint8_t **p = ptr;
-    if (min_size > SIZE_MAX - AV_INPUT_BUFFER_PADDING_SIZE) {
-        av_freep(p);
-        *size = 0;
-        return;
-    }
-    av_fast_mallocz(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, f, l);
-    if (*p)
-        memset(*p + min_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
-}
-
-void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size, const char* f, int l)
-{
-    uint8_t **p = ptr;
-    if (min_size > SIZE_MAX - AV_INPUT_BUFFER_PADDING_SIZE) {
-        av_freep(p);
-        *size = 0;
-        return;
-    }
-    av_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, f, l);
-    if (*p)
-        memset(*p, 0, min_size + AV_INPUT_BUFFER_PADDING_SIZE);
-}
-
-#endif

@@ -3142,8 +3142,6 @@ void avcodec_flush_buffers(AVCodecContext *avctx);
  */
 int av_get_audio_frame_duration(AVCodecContext *avctx, int frame_bytes);
 
-#ifndef _DEBUG
-
 /* memory */
 
 /**
@@ -3160,16 +3158,6 @@ void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size);
  * be 0-initialized after call.
  */
 void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size);
-
-#else
-
-void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size, const char* f, int l);
-void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size, const char* f, int l);
-
-#define av_fast_padded_malloc(ptr, size, min_size) av_fast_padded_malloc(ptr, size, min_size, __FILE__, __LINE__)
-#define av_fast_padded_mallocz(ptr, size, min_size) av_fast_padded_mallocz(ptr, size, min_size, __FILE__, __LINE__)
-
-#endif
 
 /**
  * @return a positive value if s is open (i.e. avcodec_open2() was called on it

@@ -174,8 +174,6 @@
     #define av_alloc_size(...)
 #endif
 
-#ifndef _DEBUG
-
 /**
  * @}
  */
@@ -654,56 +652,6 @@ int av_dynarray_add_nofree(void *tab_ptr, int *nb_ptr, void *elem);
  */
 void *av_dynarray2_add(void **tab_ptr, int *nb_ptr, size_t elem_size,
                        const uint8_t *elem_data);
-
-#else
-
-void *av_malloc(size_t size, const char* f, int l) av_malloc_attrib av_alloc_size(1);
-void *av_mallocz(size_t size, const char* f, int l) av_malloc_attrib av_alloc_size(1);
-av_alloc_size(1, 2) void *av_malloc_array(size_t nmemb, size_t size, const char* f, int l);
-av_alloc_size(1, 2) void *av_mallocz_array(size_t nmemb, size_t size, const char* f, int l);
-void *av_calloc(size_t nmemb, size_t size, const char* f, int l) av_malloc_attrib;
-void *av_realloc(void *ptr, size_t size, const char* f, int l) av_alloc_size(2);
-av_warn_unused_result int av_reallocp(void *ptr, size_t size, const char* f, int l);
-void *av_realloc_f(void *ptr, size_t nelem, size_t elsize, const char* f, int l);
-av_alloc_size(2, 3) void *av_realloc_array(void *ptr, size_t nmemb, size_t size, const char* f, int l);
-int av_reallocp_array(void *ptr, size_t nmemb, size_t size, const char* f, int l);
-void *av_fast_realloc(void *ptr, unsigned int *size, size_t min_size, const char* f, int l);
-void av_fast_malloc(void *ptr, unsigned int *size, size_t min_size, const char* f, int l);
-void av_fast_mallocz(void *ptr, unsigned int *size, size_t min_size, const char* f, int l);
-void av_free(void *ptr);
-void av_freep(void *ptr);
-char *av_strdup(const char *s, const char* f, int l) av_malloc_attrib;
-char *av_strndup(const char *s, size_t len, const char* f, int l) av_malloc_attrib;
-void *av_memdup(const void *p, size_t size, const char* f, int l);
-void av_memcpy_backptr(uint8_t *dst, int back, int cnt);
-void av_dynarray_add(void *tab_ptr, int *nb_ptr, void *elem, const char* f, int l);
-av_warn_unused_result int av_dynarray_add_nofree(void *tab_ptr, int *nb_ptr, void *elem, const char* f, int l);
-void *av_dynarray2_add(void **tab_ptr, int *nb_ptr, size_t elem_size, const uint8_t *elem_data, const char* f, int l);
-
-#define av_malloc(size) av_malloc(size, __FILE__, __LINE__)
-#define av_mallocz(size) av_mallocz(size, __FILE__, __LINE__)
-#define av_malloc_array(nmemb, size) av_malloc_array(nmemb, size, __FILE__, __LINE__)
-#define av_mallocz_array(nmemb, size) av_mallocz_array(nmemb, size, __FILE__, __LINE__)
-#define av_calloc(nmemb, size) av_calloc(nmemb, size, __FILE__, __LINE__)
-#define av_realloc(ptr, size) av_realloc(ptr, size, __FILE__, __LINE__)
-#define av_reallocp(ptr, size) av_reallocp(ptr, size, __FILE__, __LINE__)
-#define av_realloc_f(ptr, nelem, elsize) av_realloc_f(ptr, nelem, elsize, __FILE__, __LINE__)
-#define av_realloc_array(ptr, nmemb, size) av_realloc_array(ptr, nmemb, size, __FILE__, __LINE__)
-#define av_reallocp_array(ptr, nmemb, size) av_reallocp_array(ptr, nmemb, size, __FILE__, __LINE__)
-#define av_fast_realloc(ptr, size, min_size) av_fast_realloc(ptr, size, min_size, __FILE__, __LINE__)
-#define av_fast_malloc(ptr, size, min_size) av_fast_malloc(ptr, size, min_size, __FILE__, __LINE__)
-#define av_fast_mallocz(ptr, size, min_size) av_fast_mallocz(ptr, size, min_size, __FILE__, __LINE__)
-#define av_free(ptr) av_free(ptr)
-#define av_freep(ptr) av_freep(ptr)
-#define av_strdup(s) av_strdup(s, __FILE__, __LINE__)
-#define av_strndup(s, len) av_strndup(s, len, __FILE__, __LINE__)
-#define av_memdup(p, size) av_memdup(p, size, __FILE__, __LINE__)
-#define av_memcpy_backptr(dst, back, cnt) av_memcpy_backptr(dst, back, cnt)
-#define av_dynarray_add(tab_ptr, nb_ptr, elem) av_dynarray_add(tab_ptr, nb_ptr, elem, __FILE__, __LINE__)
-#define av_dynarray_add_nofree(tab_ptr, nb_ptr, elem) av_dynarray_add_nofree(tab_ptr, nb_ptr, elem, __FILE__, __LINE__)
-#define av_dynarray2_add(tab_ptr, nb_ptr, elem_size, elem_data) av_dynarray2_add(tab_ptr, nb_ptr, elem_size, elem_data, __FILE__, __LINE__)
-
-#endif
 
 /**
  * @}
