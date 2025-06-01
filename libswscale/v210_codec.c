@@ -21,6 +21,7 @@
 #include "libavutil/attributes.h"
 #include "libavutil/bswap.h"
 #include "libavutil/intreadwrite.h"
+#include "libswscale/v210_codec.h"
 
 #define READ_PIXELS(a, b, c, bitdepth)                 \
     do {                                               \
@@ -127,8 +128,6 @@ static void v210_encode_line_16_c(const uint16_t *y, const uint16_t *u, const ui
 #undef BYTES_PER_PIXEL
 #undef TYPE
 
-extern void ff_sws_init_v210_x86(SwsContext *c);
-
 av_cold void ff_sws_init_v210(SwsContext *c)
 {
     c->v210_decode_line = c->dstBpc > 10 ? v210_decode_line_16_c : v210_decode_line_10_c;
@@ -143,3 +142,4 @@ av_cold void ff_sws_init_v210(SwsContext *c)
     if (ARCH_X86)
         ff_sws_init_v210_x86(c);
 }
+

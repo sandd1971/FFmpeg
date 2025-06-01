@@ -20,10 +20,9 @@
 #include "libswscale/swscale.h"
 #include "libswscale/swscale_internal.h"
 #include "libswscale/rgb2rgb.h"
+#include "libswscale/v210_codec.h"
 #include "libavutil/imgutils.h"
 #include "ipp.h"
-
-extern void ff_sws_init_v210(SwsContext *c);
 
 #define IPP_STRIDE_ALIGN    64
 #define BPP_M_TO_N(m, n) ((1 << n) - 1.0) / ((1 << m) - 1.0)
