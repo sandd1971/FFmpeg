@@ -21,12 +21,10 @@
 #include "config_components.h"
 
 #include "libavutil/opt.h"
-#include "libavutil/imgutils.h"
+#include "libavutil/pixdesc.h"
 #include "avfilter.h"
 #include "drawutils.h"
-#include "formats.h"
-#include "internal.h"
-#include "video.h"
+#include "filters.h"
 
 typedef struct ColorkeyContext {
     const AVClass *class;
@@ -217,22 +215,22 @@ static const AVFilterPad colorkey_outputs[] = {
 
 static const AVOption colorkey_options[] = {
     { "color", "set the colorkey key color", OFFSET(colorkey_rgba), AV_OPT_TYPE_COLOR, { .str = "black" }, 0, 0, FLAGS },
-    { "similarity", "set the colorkey similarity value", OFFSET(similarity), AV_OPT_TYPE_FLOAT, { .dbl = 0.01 }, 0.01, 1.0, FLAGS },
+    { "similarity", "set the colorkey similarity value", OFFSET(similarity), AV_OPT_TYPE_FLOAT, { .dbl = 0.01 }, 0.00001, 1.0, FLAGS },
     { "blend", "set the colorkey key blend value", OFFSET(blend), AV_OPT_TYPE_FLOAT, { .dbl = 0.0 }, 0.0, 1.0, FLAGS },
     { NULL }
 };
 
 AVFILTER_DEFINE_CLASS(colorkey);
 
-const AVFilter ff_vf_colorkey = {
-    .name          = "colorkey",
-    .description   = NULL_IF_CONFIG_SMALL("Turns a certain color into transparency. Operates on RGB colors."),
+const FFFilter ff_vf_colorkey = {
+    .p.name        = "colorkey",
+    .p.description = NULL_IF_CONFIG_SMALL("Turns a certain color into transparency. Operates on RGB colors."),
+    .p.priv_class  = &colorkey_class,
+    .p.flags       = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .priv_size     = sizeof(ColorkeyContext),
-    .priv_class    = &colorkey_class,
     FILTER_INPUTS(colorkey_inputs),
     FILTER_OUTPUTS(colorkey_outputs),
     FILTER_PIXFMTS_ARRAY(pixel_fmts),
-    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = ff_filter_process_command,
 };
 
@@ -241,22 +239,22 @@ const AVFilter ff_vf_colorkey = {
 
 static const AVOption colorhold_options[] = {
     { "color", "set the colorhold key color", OFFSET(colorkey_rgba), AV_OPT_TYPE_COLOR, { .str = "black" }, 0, 0, FLAGS },
-    { "similarity", "set the colorhold similarity value", OFFSET(similarity), AV_OPT_TYPE_FLOAT, { .dbl = 0.01 }, 0.01, 1.0, FLAGS },
+    { "similarity", "set the colorhold similarity value", OFFSET(similarity), AV_OPT_TYPE_FLOAT, { .dbl = 0.01 }, 0.00001, 1.0, FLAGS },
     { "blend", "set the colorhold blend value", OFFSET(blend), AV_OPT_TYPE_FLOAT, { .dbl = 0.0 }, 0.0, 1.0, FLAGS },
     { NULL }
 };
 
 AVFILTER_DEFINE_CLASS(colorhold);
 
-const AVFilter ff_vf_colorhold = {
-    .name          = "colorhold",
-    .description   = NULL_IF_CONFIG_SMALL("Turns a certain color range into gray. Operates on RGB colors."),
+const FFFilter ff_vf_colorhold = {
+    .p.name        = "colorhold",
+    .p.description = NULL_IF_CONFIG_SMALL("Turns a certain color range into gray. Operates on RGB colors."),
+    .p.priv_class  = &colorhold_class,
+    .p.flags       = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .priv_size     = sizeof(ColorkeyContext),
-    .priv_class    = &colorhold_class,
     FILTER_INPUTS(colorkey_inputs),
     FILTER_OUTPUTS(colorkey_outputs),
     FILTER_PIXFMTS_ARRAY(pixel_fmts),
-    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = ff_filter_process_command,
 };
 

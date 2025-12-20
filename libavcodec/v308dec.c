@@ -21,7 +21,7 @@
 
 #include "avcodec.h"
 #include "codec_internal.h"
-#include "internal.h"
+#include "decode.h"
 
 static av_cold int v308_decode_init(AVCodecContext *avctx)
 {
@@ -29,6 +29,8 @@ static av_cold int v308_decode_init(AVCodecContext *avctx)
 
     if (avctx->width & 1)
         av_log(avctx, AV_LOG_WARNING, "v308 requires width to be even.\n");
+
+    av_log(avctx, AV_LOG_WARNING, "This decoder is deprecated and will be removed.\n");
 
     return 0;
 }
@@ -47,9 +49,6 @@ static int v308_decode_frame(AVCodecContext *avctx, AVFrame *pic,
 
     if ((ret = ff_get_buffer(avctx, pic, 0)) < 0)
         return ret;
-
-    pic->key_frame = 1;
-    pic->pict_type = AV_PICTURE_TYPE_I;
 
     y = pic->data[0];
     u = pic->data[1];
@@ -74,11 +73,10 @@ static int v308_decode_frame(AVCodecContext *avctx, AVFrame *pic,
 
 const FFCodec ff_v308_decoder = {
     .p.name       = "v308",
-    .p.long_name  = NULL_IF_CONFIG_SMALL("Uncompressed packed 4:4:4"),
+    CODEC_LONG_NAME("Uncompressed packed 4:4:4"),
     .p.type       = AVMEDIA_TYPE_VIDEO,
     .p.id         = AV_CODEC_ID_V308,
     .init         = v308_decode_init,
     FF_CODEC_DECODE_CB(v308_decode_frame),
     .p.capabilities = AV_CODEC_CAP_DR1,
-    .caps_internal = FF_CODEC_CAP_INIT_THREADSAFE,
 };

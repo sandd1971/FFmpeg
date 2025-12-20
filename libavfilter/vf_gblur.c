@@ -28,12 +28,12 @@
 #include <float.h>
 
 #include "libavutil/imgutils.h"
+#include "libavutil/mem.h"
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include "avfilter.h"
-#include "formats.h"
+#include "filters.h"
 #include "gblur.h"
-#include "internal.h"
 #include "vf_gblur_init.h"
 #include "video.h"
 
@@ -74,7 +74,6 @@ static int filter_horizontally(AVFilterContext *ctx, void *arg, int jobnr, int n
 
     s->horiz_slice(buffer + width * slice_start, width, slice_end - slice_start,
                    steps, nu, boundaryscale, localbuf);
-    emms_c();
     return 0;
 }
 
@@ -125,7 +124,7 @@ static void gaussianiir2d(AVFilterContext *ctx, int plane)
     const int nb_threads = ff_filter_get_nb_threads(ctx);
     ThreadData td;
 
-    if (s->sigma <= 0 || s->steps < 0)
+    if (s->sigma < 0 || s->steps < 0)
         return;
 
     td.width = width;
@@ -207,6 +206,12 @@ static void set_params(float sigma, int steps, float *postscale, float *boundary
     *postscale = pow(dnu / lambda, steps);
     *boundaryscale = 1.0 / (1.0 - dnu);
     *nu = (float)dnu;
+    if (!isnormal(*postscale))
+        *postscale = 1.f;
+    if (!isnormal(*boundaryscale))
+        *boundaryscale = 1.f;
+    if (!isnormal(*nu))
+        *nu = 0.f;
 }
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in)
@@ -241,7 +246,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
         uint16_t *dst16 = (uint16_t *)out->data[plane];
         int y, x;
 
-        if (!s->sigma || !(s->planes & (1 << plane))) {
+        if (!(s->planes & (1 << plane))) {
             if (out != in)
                 av_image_copy_plane(out->data[plane], out->linesize[plane],
                                     in->data[plane], in->linesize[plane],
@@ -280,17 +285,15 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
                                 width * sizeof(float), height);
         } else if (s->depth == 8) {
             for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    dst[x] = bptr[x];
-                }
+                for (x = 0; x < width; x++)
+                    dst[x] = lrintf(bptr[x]);
                 bptr += width;
                 dst += out->linesize[plane];
             }
         } else {
             for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    dst16[x] = bptr[x];
-                }
+                for (x = 0; x < width; x++)
+                    dst16[x] = lrintf(bptr[x]);
                 bptr += width;
                 dst16 += out->linesize[plane] / 2;
             }
@@ -311,22 +314,15 @@ static const AVFilterPad gblur_inputs[] = {
     },
 };
 
-static const AVFilterPad gblur_outputs[] = {
-    {
-        .name = "default",
-        .type = AVMEDIA_TYPE_VIDEO,
-    },
-};
-
-const AVFilter ff_vf_gblur = {
-    .name          = "gblur",
-    .description   = NULL_IF_CONFIG_SMALL("Apply Gaussian Blur filter."),
+const FFFilter ff_vf_gblur = {
+    .p.name        = "gblur",
+    .p.description = NULL_IF_CONFIG_SMALL("Apply Gaussian Blur filter."),
+    .p.priv_class  = &gblur_class,
+    .p.flags       = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .priv_size     = sizeof(GBlurContext),
-    .priv_class    = &gblur_class,
     .uninit        = uninit,
     FILTER_INPUTS(gblur_inputs),
-    FILTER_OUTPUTS(gblur_outputs),
+    FILTER_OUTPUTS(ff_video_default_filterpad),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC | AVFILTER_FLAG_SLICE_THREADS,
     .process_command = ff_filter_process_command,
 };

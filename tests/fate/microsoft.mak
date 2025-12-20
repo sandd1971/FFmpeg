@@ -14,8 +14,9 @@ FATE_MSS2-$(call FRAMECRC, ASF, MSS2, SCALE_FILTER) += fate-mss2-rgb555 fate-mss
 fate-mss2-rgb555:  CMD = framecrc -i $(TARGET_SAMPLES)/mss2/rle555.wmv  -pix_fmt rgb555le -vf scale
 fate-mss2-rgb555s: CMD = framecrc -i $(TARGET_SAMPLES)/mss2/rle555s.wmv -pix_fmt rgb555le -vf scale
 
-FATE_MSS2 += fate-mss2-wmv
+FATE_MSS2 += fate-mss2-wmv fate-mss2-region
 fate-mss2-wmv: CMD = framecrc -i $(TARGET_SAMPLES)/mss2/msscreencodec.wmv -an -frames 100
+fate-mss2-region: CMD = framecrc -i $(TARGET_SAMPLES)/mss2/mss2_2.wmv -an
 
 FATE_MSS2-$(call FRAMECRC, ASF, MSS2) += $(FATE_MSS2)
 
@@ -46,7 +47,7 @@ fate-wmv3-drm-nodec: CMD = framecrc -cryptokey 137381538c84c068111902a59c5cf6c34
 FATE_MICROSOFT += $(FATE_WMV3_DRM-yes)
 fate-wmv3-drm: $(FATE_WMV3_DRM-yes)
 
-FATE_MICROSOFT-$(call DEMDEC, ASF, WMV2) += fate-wmv8-x8intra
+FATE_MICROSOFT-$(call FRAMECRC, ASF, WMV2) += fate-wmv8-x8intra
 fate-wmv8-x8intra: CMD = framecrc -flags +bitexact -i $(TARGET_SAMPLES)/wmv8/wmv8_x8intra.wmv -an
 
 FATE_VC1 += fate-vc1_sa00040
@@ -79,7 +80,7 @@ fate-vc1-ism: CMD = framecrc -i $(TARGET_SAMPLES)/isom/vc1-wmapro.ism -an
 FATE_MICROSOFT += $(FATE_VC1-yes)
 fate-vc1: $(FATE_VC1-yes)
 
-FATE_MICROSOFT-$(call ALLYES, FILE_PROTOCOL PIPE_PROTOCOL ASF_DEMUXER FRAMECRC_MUXER) += fate-asf-repldata
+FATE_MICROSOFT-$(call ALLYES, PIPE_PROTOCOL ASF_DEMUXER FRAMECRC_MUXER) += fate-asf-repldata
 fate-asf-repldata: CMD = framecrc -i $(TARGET_SAMPLES)/asf/bug821-2.asf -c copy
 
 FATE_MICROSOFT += $(FATE_MICROSOFT-yes)

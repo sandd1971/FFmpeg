@@ -28,6 +28,7 @@
 #include "network.h"
 #include "httpauth.h"
 #include "internal.h"
+#include "os_support.h"
 
 #include "libavutil/log.h"
 #include "libavutil/opt.h"
@@ -418,6 +419,17 @@ typedef struct RTSPState {
     int buffer_size;
     int pkt_size;
     char *localaddr;
+
+    /**
+     * Options used for TLS based RTSP streams.
+     */
+    struct {
+        char *ca_file;
+        int verify;
+        char *cert_file;
+        char *key_file;
+        char *host;
+    } tls_opts;
 } RTSPState;
 
 #define RTSP_FLAG_FILTER_SRC  0x1    /**< Filter incoming UDP packets -

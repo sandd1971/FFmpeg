@@ -28,7 +28,8 @@
 #include "bytestream.h"
 #include "codec_internal.h"
 #include "decode.h"
-#include "internal.h"
+
+#include "libavutil/attributes.h"
 
 typedef struct QpegContext{
     AVCodecContext *avctx;
@@ -298,14 +299,16 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *p,
     }
 
     /* make the palette available on the way out */
-    p->palette_has_changed = ff_copy_palette(a->pal, avpkt, avctx);
+    ff_copy_palette(a->pal, avpkt, avctx);
     memcpy(p->data[1], a->pal, AVPALETTE_SIZE);
 
-    av_frame_unref(ref);
-    if ((ret = av_frame_ref(ref, p)) < 0)
+    if ((ret = av_frame_replace(ref, p)) < 0)
         return ret;
 
-    p->key_frame = intra;
+    if (intra)
+        p->flags |= AV_FRAME_FLAG_KEY;
+    else
+        p->flags &= ~AV_FRAME_FLAG_KEY;
     p->pict_type = intra ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_P;
 
     *got_frame      = 1;
@@ -313,7 +316,8 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *p,
     return avpkt->size;
 }
 
-static void decode_flush(AVCodecContext *avctx){
+static av_cold void decode_flush(AVCodecContext *avctx)
+{
     QpegContext * const a = avctx->priv_data;
     int i, pal_size;
     const uint8_t *pal_src;
@@ -353,7 +357,7 @@ static av_cold int decode_init(AVCodecContext *avctx){
 
 const FFCodec ff_qpeg_decoder = {
     .p.name         = "qpeg",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("Q-team QPEG"),
+    CODEC_LONG_NAME("Q-team QPEG"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_QPEG,
     .priv_data_size = sizeof(QpegContext),
@@ -362,6 +366,5 @@ const FFCodec ff_qpeg_decoder = {
     FF_CODEC_DECODE_CB(decode_frame),
     .flush          = decode_flush,
     .p.capabilities = AV_CODEC_CAP_DR1,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
-                      FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
 };

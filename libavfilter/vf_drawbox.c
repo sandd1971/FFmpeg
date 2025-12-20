@@ -36,8 +36,7 @@
 #include "libavutil/detection_bbox.h"
 #include "avfilter.h"
 #include "drawutils.h"
-#include "formats.h"
-#include "internal.h"
+#include "filters.h"
 #include "video.h"
 
 static const char *const var_names[] = {
@@ -162,7 +161,7 @@ static void draw_region(AVFrame *frame, DrawBoxContext *ctx, int left, int top, 
     row[2] = frame->data[0] + y * frame->linesize[0] + ctx->rgba_map[2];
 
 #define ASSIGN_FOUR_CHANNELS_PACKED                   \
-    ASSIGN_THREE_CHANNELS                             \
+    ASSIGN_THREE_CHANNELS_PACKED                      \
     row[3] = frame->data[0] + y * frame->linesize[0] + ctx->rgba_map[3];
 
 static void draw_region_rgb_packed(AVFrame *frame, DrawBoxContext *ctx, int left, int top, int right, int down,
@@ -372,7 +371,8 @@ static av_pure av_always_inline int pixel_belongs_to_box(DrawBoxContext *s, int 
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
 {
-    DrawBoxContext *s = inlink->dst->priv;
+    AVFilterContext *ctx = inlink->dst;
+    DrawBoxContext *s = ctx->priv;
     const AVDetectionBBoxHeader *header = NULL;
     const AVDetectionBBox *bbox;
     AVFrameSideData *sd;
@@ -384,7 +384,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
             header = (AVDetectionBBoxHeader *)sd->data;
             loop = header->nb_bboxes;
         } else {
-            av_log(s, AV_LOG_WARNING, "No detection bboxes.\n");
+            av_log(ctx, AV_LOG_WARNING, "No detection bboxes.\n");
             return ff_filter_frame(inlink->dst->outputs[0], frame);
         }
     }
@@ -455,7 +455,7 @@ static const AVOption drawbox_options[] = {
     { "thickness", "set the box thickness",                        OFFSET(t_expr),    AV_OPT_TYPE_STRING, { .str="3" },       0, 0, FLAGS },
     { "t",         "set the box thickness",                        OFFSET(t_expr),    AV_OPT_TYPE_STRING, { .str="3" },       0, 0, FLAGS },
     { "replace",   "replace color & alpha",                        OFFSET(replace),   AV_OPT_TYPE_BOOL,   { .i64=0   },       0, 1, FLAGS },
-    { "box_source", "use datas from bounding box in side data",    OFFSET(box_source_string), AV_OPT_TYPE_STRING, { .str=NULL }, 0, 1, FLAGS },
+    { "box_source","use data from bounding box in side data",      OFFSET(box_source_string), AV_OPT_TYPE_STRING, { .str=NULL }, 0, 1, FLAGS },
     { NULL }
 };
 
@@ -471,24 +471,17 @@ static const AVFilterPad drawbox_inputs[] = {
     },
 };
 
-static const AVFilterPad drawbox_outputs[] = {
-    {
-        .name = "default",
-        .type = AVMEDIA_TYPE_VIDEO,
-    },
-};
-
-const AVFilter ff_vf_drawbox = {
-    .name          = "drawbox",
-    .description   = NULL_IF_CONFIG_SMALL("Draw a colored box on the input video."),
+const FFFilter ff_vf_drawbox = {
+    .p.name        = "drawbox",
+    .p.description = NULL_IF_CONFIG_SMALL("Draw a colored box on the input video."),
+    .p.priv_class  = &drawbox_class,
+    .p.flags       = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
     .priv_size     = sizeof(DrawBoxContext),
-    .priv_class    = &drawbox_class,
     .init          = init,
     FILTER_INPUTS(drawbox_inputs),
-    FILTER_OUTPUTS(drawbox_outputs),
+    FILTER_OUTPUTS(ff_video_default_filterpad),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
     .process_command = process_command,
-    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
 };
 #endif /* CONFIG_DRAWBOX_FILTER */
 
@@ -553,23 +546,16 @@ static const AVFilterPad drawgrid_inputs[] = {
     },
 };
 
-static const AVFilterPad drawgrid_outputs[] = {
-    {
-        .name = "default",
-        .type = AVMEDIA_TYPE_VIDEO,
-    },
-};
-
-const AVFilter ff_vf_drawgrid = {
-    .name          = "drawgrid",
-    .description   = NULL_IF_CONFIG_SMALL("Draw a colored grid on the input video."),
+const FFFilter ff_vf_drawgrid = {
+    .p.name        = "drawgrid",
+    .p.description = NULL_IF_CONFIG_SMALL("Draw a colored grid on the input video."),
+    .p.priv_class  = &drawgrid_class,
+    .p.flags       = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
     .priv_size     = sizeof(DrawBoxContext),
-    .priv_class    = &drawgrid_class,
     .init          = init,
     FILTER_INPUTS(drawgrid_inputs),
-    FILTER_OUTPUTS(drawgrid_outputs),
+    FILTER_OUTPUTS(ff_video_default_filterpad),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
     .process_command = process_command,
 };
 

@@ -25,13 +25,16 @@
  * @author Stefan Gehrer <stefan.gehrer@gmx.de>
  */
 
+#include "libavutil/attributes.h"
 #include "libavutil/avassert.h"
+#include "libavutil/emms.h"
+#include "libavutil/mem.h"
 #include "avcodec.h"
 #include "get_bits.h"
 #include "golomb.h"
 #include "cavs.h"
 #include "codec_internal.h"
-#include "internal.h"
+#include "decode.h"
 #include "mathops.h"
 #include "mpeg12data.h"
 #include "startcode.h"
@@ -521,7 +524,7 @@ static inline int dequant(AVSContext *h, int16_t *level_buf, uint8_t *run_buf,
 {
     int round = 1 << (shift - 1);
     int pos = -1;
-    const uint8_t *scantab = h->scantable.permutated;
+    const uint8_t *scantab = h->permutated_scantable;
 
     /* inverse scan and dequantization */
     while (--coeff_num >= 0) {
@@ -1020,6 +1023,9 @@ static int decode_pic(AVSContext *h)
             skip_bits(&h->gb, 1); //marker_bit
     }
 
+    if (get_bits_left(&h->gb) < 23)
+        return AVERROR_INVALIDDATA;
+
     ret = ff_get_buffer(h->avctx, h->cur.f, h->cur.f->pict_type == AV_PICTURE_TYPE_B ?
                         0 : AV_GET_BUFFER_FLAG_REF);
     if (ret < 0)
@@ -1179,7 +1185,7 @@ static int decode_seq_header(AVSContext *h)
     h->profile = get_bits(&h->gb, 8);
     if (h->profile != 0x20) {
         avpriv_report_missing_feature(h->avctx,
-                                      "only supprt JiZhun profile");
+                                      "only support JiZhun profile");
         return AVERROR_PATCHWELCOME;
     }
     h->level   = get_bits(&h->gb, 8);
@@ -1225,7 +1231,7 @@ static int decode_seq_header(AVSContext *h)
     return 0;
 }
 
-static void cavs_flush(AVCodecContext * avctx)
+static av_cold void cavs_flush(AVCodecContext * avctx)
 {
     AVSContext *h = avctx->priv_data;
     h->got_keyframe = 0;
@@ -1317,7 +1323,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
 
 const FFCodec ff_cavs_decoder = {
     .p.name         = "cavs",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("Chinese AVS (Audio Video Standard) (AVS1-P2, JiZhun profile)"),
+    CODEC_LONG_NAME("Chinese AVS (Audio Video Standard) (AVS1-P2, JiZhun profile)"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_CAVS,
     .priv_data_size = sizeof(AVSContext),
@@ -1326,5 +1332,5 @@ const FFCodec ff_cavs_decoder = {
     FF_CODEC_DECODE_CB(cavs_decode_frame),
     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
     .flush          = cavs_flush,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
 };

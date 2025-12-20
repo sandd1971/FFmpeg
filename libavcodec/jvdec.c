@@ -30,14 +30,13 @@
 #include "avcodec.h"
 #include "blockdsp.h"
 #include "codec_internal.h"
+#include "decode.h"
 #include "get_bits.h"
-#include "internal.h"
 
 typedef struct JvContext {
     BlockDSPContext bdsp;
     AVFrame   *frame;
     uint32_t   palette[AVPALETTE_COUNT];
-    int        palette_has_changed;
 } JvContext;
 
 static av_cold int decode_init(AVCodecContext *avctx)
@@ -56,7 +55,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
         return AVERROR(ENOMEM);
 
     avctx->pix_fmt = AV_PIX_FMT_PAL8;
-    ff_blockdsp_init(&s->bdsp, avctx);
+    ff_blockdsp_init(&s->bdsp);
     return 0;
 }
 
@@ -207,14 +206,9 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *rframe,
             s->palette[i] = 0xFFU << 24 | pal << 2 | ((pal >> 4) & 0x30303);
             buf += 3;
         }
-        s->palette_has_changed = 1;
     }
 
     if (video_size) {
-        s->frame->key_frame           = 1;
-        s->frame->pict_type           = AV_PICTURE_TYPE_I;
-        s->frame->palette_has_changed = s->palette_has_changed;
-        s->palette_has_changed        = 0;
         memcpy(s->frame->data[1], s->palette, AVPALETTE_SIZE);
 
         if ((ret = av_frame_ref(rframe, s->frame)) < 0)
@@ -236,7 +230,7 @@ static av_cold int decode_close(AVCodecContext *avctx)
 
 const FFCodec ff_jv_decoder = {
     .p.name         = "jv",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("Bitmap Brothers JV video"),
+    CODEC_LONG_NAME("Bitmap Brothers JV video"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_JV,
     .priv_data_size = sizeof(JvContext),
@@ -244,5 +238,4 @@ const FFCodec ff_jv_decoder = {
     .close          = decode_close,
     FF_CODEC_DECODE_CB(decode_frame),
     .p.capabilities = AV_CODEC_CAP_DR1,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

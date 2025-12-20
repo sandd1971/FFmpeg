@@ -31,7 +31,7 @@
 #include "avcodec.h"
 #include "bytestream.h"
 #include "codec_internal.h"
-#include "internal.h"
+#include "decode.h"
 
 enum QuickdrawOpcodes {
     CLIP = 0x0001,
@@ -368,7 +368,7 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *p,
             bytestream2_skip(&gbc, 18);
             colors = bytestream2_get_be16(&gbc);
 
-            if (colors < 0 || colors > 256) {
+            if (colors < 0 || colors > 255) {
                 av_log(avctx, AV_LOG_ERROR,
                        "Error color count - %i(0x%X)\n", colors, colors);
                 return AVERROR_INVALIDDATA;
@@ -384,7 +384,6 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *p,
             ret = parse_palette(avctx, &gbc, (uint32_t *)p->data[1], colors, flags & 0x8000);
             if (ret < 0)
                 return ret;
-            p->palette_has_changed = 1;
 
             /* jump to image data */
             bytestream2_skip(&gbc, 18);
@@ -502,9 +501,6 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *p,
     }
 
     if (*got_frame) {
-        p->pict_type = AV_PICTURE_TYPE_I;
-        p->key_frame = 1;
-
         return avpkt->size;
     } else {
         av_log(avctx, AV_LOG_ERROR, "Frame contained no usable data\n");
@@ -515,7 +511,7 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *p,
 
 const FFCodec ff_qdraw_decoder = {
     .p.name         = "qdraw",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("Apple QuickDraw"),
+    CODEC_LONG_NAME("Apple QuickDraw"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_QDRAW,
     .p.capabilities = AV_CODEC_CAP_DR1,

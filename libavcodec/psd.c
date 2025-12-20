@@ -19,9 +19,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "libavutil/mem.h"
 #include "bytestream.h"
 #include "codec_internal.h"
-#include "internal.h"
+#include "decode.h"
 
 enum PsdCompr {
     PSD_RAW,
@@ -172,10 +173,10 @@ static int decode_header(PSDContext * s)
     }
     bytestream2_skip(&s->gb, len_section);
 
-    /* image ressources */
+    /* image resources */
     len_section = bytestream2_get_be32(&s->gb);
     if (len_section < 0) {
-        av_log(s->avctx, AV_LOG_ERROR, "Negative size for image ressources section.\n");
+        av_log(s->avctx, AV_LOG_ERROR, "Negative size for image resources section.\n");
         return AVERROR_INVALIDDATA;
     }
 
@@ -417,9 +418,6 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *picture,
 
     s->uncompressed_size = s->line_size * s->height * s->channel_count;
 
-    if ((ret = ff_get_buffer(avctx, picture, 0)) < 0)
-        return ret;
-
     /* decode picture if need */
     if (s->compression == PSD_RLE) {
         s->tmp = av_malloc(s->uncompressed_size);
@@ -441,6 +439,9 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *picture,
         }
         ptr_data = s->gb.buffer;
     }
+
+    if ((ret = ff_get_buffer(avctx, picture, 0)) < 0)
+        return ret;
 
     /* Store data */
     if ((avctx->pix_fmt == AV_PIX_FMT_YA8)||(avctx->pix_fmt == AV_PIX_FMT_YA16BE)){/* Interleaved */
@@ -532,7 +533,6 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *picture,
     }
 
     if (s->color_mode == PSD_INDEXED) {
-        picture->palette_has_changed = 1;
         memcpy(picture->data[1], s->palette, AVPALETTE_SIZE);
     }
 
@@ -546,7 +546,7 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *picture,
 
 const FFCodec ff_psd_decoder = {
     .p.name           = "psd",
-    .p.long_name      = NULL_IF_CONFIG_SMALL("Photoshop PSD file"),
+    CODEC_LONG_NAME("Photoshop PSD file"),
     .p.type           = AVMEDIA_TYPE_VIDEO,
     .p.id             = AV_CODEC_ID_PSD,
     .p.capabilities   = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_FRAME_THREADS,

@@ -17,10 +17,10 @@
  */
 
 #include "libavutil/opt.h"
+#include "libavutil/pixdesc.h"
 #include "libavcodec/codec.h"
 #include "libavcodec/codec_desc.h"
 #include "libavcodec/codec_internal.h"
-#include "libavcodec/internal.h"
 
 static const char *get_type_string(enum AVMediaType type)
 {
@@ -56,6 +56,30 @@ static int priv_data_size_wrong(const FFCodec *codec)
     return 0;
 }
 
+#define ARRAY_CHECK(field, var, type, is_sentinel, check, sentinel_check) \
+do {                                                                      \
+    const type *ptr = codec->field;                                       \
+    if (!ptr)                                                             \
+        break;                                                            \
+    type var = *ptr;                                                      \
+    if (is_sentinel) {                                                    \
+        ERR("Codec %s sets " #field ", but without valid elements.\n");   \
+        break;                                                            \
+    }                                                                     \
+    do {                                                                  \
+        if (!(check)) {                                                   \
+            ERR("Codec's %s " #field " array contains invalid element\n");\
+            break;                                                        \
+        }                                                                 \
+        ++ptr;                                                            \
+        var = *ptr;                                                       \
+    } while (!(is_sentinel));                                             \
+    if (!(sentinel_check)) {                                              \
+        ERR("Codec's %s " #field " array has malformed sentinel\n");      \
+        break;                                                            \
+    }                                                                     \
+} while (0)
+
 int main(void){
     void *iter = NULL;
     const AVCodec *codec = NULL;
@@ -78,17 +102,32 @@ int main(void){
             ERR_EXT("Codec %s has unsupported type %s\n",
                     get_type_string(codec->type));
         if (codec->type != AVMEDIA_TYPE_AUDIO) {
+FF_DISABLE_DEPRECATION_WARNINGS
             if (codec->ch_layouts || codec->sample_fmts ||
                 codec->supported_samplerates)
                 ERR("Non-audio codec %s has audio-only fields set\n");
+FF_ENABLE_DEPRECATION_WARNINGS
             if (codec->capabilities & (AV_CODEC_CAP_SMALL_LAST_FRAME |
                                        AV_CODEC_CAP_CHANNEL_CONF     |
                                        AV_CODEC_CAP_VARIABLE_FRAME_SIZE))
                 ERR("Non-audio codec %s has audio-only capabilities set\n");
+        } else {
+FF_DISABLE_DEPRECATION_WARNINGS
+            ARRAY_CHECK(supported_samplerates, sample_rate, int, sample_rate == 0,
+                        sample_rate > 0, 1);
+            ARRAY_CHECK(sample_fmts, sample_fmt, enum AVSampleFormat, sample_fmt == AV_SAMPLE_FMT_NONE,
+                        (unsigned)sample_fmt < AV_SAMPLE_FMT_NB, 1);
+            static const AVChannelLayout zero_channel_layout = { 0 };
+            ARRAY_CHECK(ch_layouts, ch_layout, AVChannelLayout, ch_layout.nb_channels == 0,
+                        av_channel_layout_check(&ch_layout), !memcmp(ptr, &zero_channel_layout, sizeof(ch_layout)));
+FF_ENABLE_DEPRECATION_WARNINGS
         }
         if (codec->type != AVMEDIA_TYPE_VIDEO) {
-            if (codec->pix_fmts || codec->supported_framerates)
+FF_DISABLE_DEPRECATION_WARNINGS
+            if (codec->pix_fmts || codec->supported_framerates ||
+                codec2->color_ranges || codec2->alpha_modes)
                 ERR("Non-video codec %s has video-only fields set\n");
+FF_ENABLE_DEPRECATION_WARNINGS
             if (codec2->caps_internal & FF_CODEC_CAP_EXPORTS_CROPPING)
                 ERR("Non-video codec %s exports cropping\n");
         }
@@ -137,25 +176,41 @@ int main(void){
             if (codec2->update_thread_context || codec2->update_thread_context_for_user || codec2->bsfs)
                 ERR("Encoder %s has decoder-only thread functions or bsf.\n");
             if (codec->type == AVMEDIA_TYPE_AUDIO) {
+FF_DISABLE_DEPRECATION_WARNINGS
                 if (!codec->sample_fmts) {
                     av_log(NULL, AV_LOG_FATAL, "Encoder %s is missing the sample_fmts field\n", codec->name);
                     ret = 1;
                 }
+            } else if (codec->type == AVMEDIA_TYPE_VIDEO) {
+                ARRAY_CHECK(pix_fmts, pix_fmt, enum AVPixelFormat, pix_fmt == AV_PIX_FMT_NONE,
+                            av_pix_fmt_desc_get(pix_fmt), 1);
+                ARRAY_CHECK(supported_framerates, framerate, AVRational, framerate.num == 0,
+                            framerate.num > 0 && framerate.den > 0, framerate.den == 0);
+FF_ENABLE_DEPRECATION_WARNINGS
             }
-            if (codec2->caps_internal & (FF_CODEC_CAP_ALLOCATE_PROGRESS |
+            if (codec2->caps_internal & (FF_CODEC_CAP_USES_PROGRESSFRAMES |
                                         FF_CODEC_CAP_SETS_PKT_DTS |
                                         FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM |
                                         FF_CODEC_CAP_EXPORTS_CROPPING |
                                         FF_CODEC_CAP_SETS_FRAME_PROPS) ||
                 codec->capabilities  & (AV_CODEC_CAP_AVOID_PROBING |
                                         AV_CODEC_CAP_CHANNEL_CONF  |
-                                        AV_CODEC_CAP_DRAW_HORIZ_BAND |
-                                        AV_CODEC_CAP_SUBFRAMES))
+                                        AV_CODEC_CAP_DRAW_HORIZ_BAND))
                 ERR("Encoder %s has decoder-only capabilities set\n");
             if (codec->capabilities & AV_CODEC_CAP_FRAME_THREADS &&
                 codec->capabilities & AV_CODEC_CAP_ENCODER_FLUSH)
                 ERR("Frame-threaded encoder %s claims to support flushing\n");
+            if (codec->capabilities & AV_CODEC_CAP_FRAME_THREADS &&
+                codec->capabilities & AV_CODEC_CAP_DELAY)
+                ERR("Frame-threaded encoder %s claims to have delay\n");
+
+            if (codec2->caps_internal & FF_CODEC_CAP_EOF_FLUSH &&
+                !(codec->capabilities & AV_CODEC_CAP_DELAY))
+                ERR("EOF_FLUSH encoder %s is not marked as having delay\n");
         } else {
+            if ((codec2->update_thread_context || codec2->update_thread_context_for_user) &&
+                !(codec->capabilities & AV_CODEC_CAP_FRAME_THREADS))
+                ERR("Non-frame-threaded decoder %s has update_thread_context set");
             if ((codec->type == AVMEDIA_TYPE_SUBTITLE) != (codec2->cb_type == FF_CODEC_CB_TYPE_DECODE_SUB))
                 ERR("Subtitle decoder %s does not implement decode_sub callback\n");
             if (codec->type == AVMEDIA_TYPE_SUBTITLE && codec2->bsfs)
@@ -166,10 +221,14 @@ int main(void){
                                        AV_CODEC_CAP_ENCODER_REORDERED_OPAQUE |
                                        AV_CODEC_CAP_ENCODER_FLUSH))
                 ERR("Decoder %s has encoder-only capabilities\n");
-            if (codec2->caps_internal & FF_CODEC_CAP_ALLOCATE_PROGRESS &&
-                !(codec->capabilities & AV_CODEC_CAP_FRAME_THREADS))
-                ERR("Decoder %s wants allocated progress without supporting"
-                    "frame threads\n");
+            if (codec2->cb_type != FF_CODEC_CB_TYPE_DECODE &&
+                codec2->caps_internal & FF_CODEC_CAP_SETS_PKT_DTS)
+                ERR("Decoder %s is marked as setting pkt_dts when it doesn't have"
+                    "any effect\n");
+FF_DISABLE_DEPRECATION_WARNINGS
+            if (codec->type == AVMEDIA_TYPE_VIDEO && (codec->pix_fmts || codec->supported_framerates))
+                ERR("Decoder %s sets pix_fmts or supported_framerates.\n");
+FF_ENABLE_DEPRECATION_WARNINGS
         }
         if (priv_data_size_wrong(codec2))
             ERR_EXT("Private context of codec %s is impossibly-sized (size %d).",

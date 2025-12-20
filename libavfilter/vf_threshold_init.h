@@ -38,7 +38,7 @@ static void threshold8(const uint8_t *in, const uint8_t *threshold,
 {
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++)
-            out[x] = in[x] < threshold[x] ? min[x] : max[x];
+            out[x] = in[x] <= threshold[x] ? min[x] : max[x];
 
         in        += ilinesize;
         threshold += tlinesize;
@@ -64,7 +64,7 @@ static void threshold16(const uint8_t *iin, const uint8_t *tthreshold,
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++)
-            out[x] = in[x] < threshold[x] ? min[x] : max[x];
+            out[x] = in[x] <= threshold[x] ? min[x] : max[x];
 
         in        += ilinesize / 2;
         threshold += tlinesize / 2;
@@ -74,7 +74,7 @@ static void threshold16(const uint8_t *iin, const uint8_t *tthreshold,
     }
 }
 
-static av_unused void ff_threshold_init(ThresholdContext *s)
+av_unused static void ff_threshold_init(ThresholdContext *s)
 {
     if (s->depth == 8) {
         s->threshold = threshold8;
@@ -84,8 +84,9 @@ static av_unused void ff_threshold_init(ThresholdContext *s)
         s->bpc = 2;
     }
 
-    if (ARCH_X86)
-        ff_threshold_init_x86(s);
+#if ARCH_X86 && HAVE_X86ASM
+    ff_threshold_init_x86(s);
+#endif
 }
 
 #endif /* AVFILTER_THRESHOLD_INIT_H */

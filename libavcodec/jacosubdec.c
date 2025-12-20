@@ -32,8 +32,6 @@
 #include "libavutil/bprint.h"
 #include "libavutil/time_internal.h"
 
-#undef time
-
 static int insert_text(AVBPrint *dst, const char *in, const char *arg)
 {
     av_bprintf(dst, "%s", arg);
@@ -195,12 +193,11 @@ end:
 
 const FFCodec ff_jacosub_decoder = {
     .p.name         = "jacosub",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("JACOsub subtitle"),
+    CODEC_LONG_NAME("JACOsub subtitle"),
     .p.type         = AVMEDIA_TYPE_SUBTITLE,
     .p.id           = AV_CODEC_ID_JACOSUB,
     .init           = ff_ass_subtitle_header_default,
     FF_CODEC_DECODE_SUB_CB(jacosub_decode_frame),
     .flush          = ff_ass_decoder_flush,
     .priv_data_size = sizeof(FFASSDecoderContext),
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

@@ -31,15 +31,14 @@
  * data. 24-bit data is RGB24 and 32-bit data is RGB32.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "avcodec.h"
 #include "decode.h"
 #include "bytestream.h"
 #include "codec_internal.h"
-#include "internal.h"
+
+#include "libavutil/attributes.h"
 
 typedef struct QtrleContext {
     AVCodecContext *avctx;
@@ -540,8 +539,7 @@ static int qtrle_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
     }
 
     if(has_palette) {
-        s->frame->palette_has_changed = ff_copy_palette(s->pal, avpkt, avctx);
-
+        ff_copy_palette(s->pal, avpkt, avctx);
         /* make the palette available on the way out */
         memcpy(s->frame->data[1], s->pal, AVPALETTE_SIZE);
     }
@@ -565,7 +563,7 @@ done:
     return avpkt->size;
 }
 
-static void qtrle_decode_flush(AVCodecContext *avctx)
+static av_cold void qtrle_decode_flush(AVCodecContext *avctx)
 {
     QtrleContext *s = avctx->priv_data;
 
@@ -583,7 +581,7 @@ static av_cold int qtrle_decode_end(AVCodecContext *avctx)
 
 const FFCodec ff_qtrle_decoder = {
     .p.name         = "qtrle",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("QuickTime Animation (RLE) video"),
+    CODEC_LONG_NAME("QuickTime Animation (RLE) video"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_QTRLE,
     .priv_data_size = sizeof(QtrleContext),
@@ -592,5 +590,4 @@ const FFCodec ff_qtrle_decoder = {
     FF_CODEC_DECODE_CB(qtrle_decode_frame),
     .flush          = qtrle_decode_flush,
     .p.capabilities = AV_CODEC_CAP_DR1,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

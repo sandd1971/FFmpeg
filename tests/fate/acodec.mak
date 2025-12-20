@@ -121,12 +121,12 @@ fate-acodec-dca: CMD = md5 -i $(TARGET_PATH)/$(SRC) -c:a dca -strict -2 -f dts -
 fate-acodec-dca: CMP = oneline
 fate-acodec-dca: REF = 2aa580ac67820fce4f581b96ebb34acc
 
-FATE_ACODEC-$(call ENCDEC, DCA, WAV, ARESAMPLE_FILTER) += fate-acodec-dca2
+FATE_ACODEC-$(call ENCDEC, DCA, WAV, ARESAMPLE_FILTER PIPE_PROTOCOL) += fate-acodec-dca2
 fate-acodec-dca2: CMD = enc_dec_pcm dts wav s16le $(SRC) -c:a dca -strict -2 -flags +bitexact -af aresample
 fate-acodec-dca2: REF = $(SRC)
 fate-acodec-dca2: CMP = stddev
 fate-acodec-dca2: CMP_SHIFT = -2048
-fate-acodec-dca2: CMP_TARGET = 535
+fate-acodec-dca2: CMP_TARGET = 534
 fate-acodec-dca2: SIZE_TOLERANCE = 1632
 
 FATE_ACODEC-$(call ENCDEC, FLAC, FLAC) += fate-acodec-flac fate-acodec-flac-exact-rice
@@ -144,7 +144,7 @@ fate-acodec-g723_1: CODEC = g723_1
 fate-acodec-g723_1: ENCOPTS = -b:a 6.3k
 fate-acodec-g723_1: CMP_SHIFT = 8
 
-FATE_ACODEC-$(call ENCDEC, RA_144, WAV) += fate-acodec-ra144
+FATE_ACODEC-$(call ENCDEC, RA_144, WAV, PIPE_PROTOCOL) += fate-acodec-ra144
 fate-acodec-ra144: tests/data/asynth-8000-1.wav
 fate-acodec-ra144: SRC = tests/data/asynth-8000-1.wav
 fate-acodec-ra144: CMD = enc_dec_pcm rm wav s16le $(SRC) -c:a real_144
@@ -156,14 +156,14 @@ fate-acodec-ra144: CMP_SHIFT = -320
 FATE_ACODEC-$(call ENCDEC, ROQ_DPCM, ROQ, ARESAMPLE_FILTER) += fate-acodec-roqaudio
 fate-acodec-roqaudio: FMT = roq
 fate-acodec-roqaudio: CODEC = roq_dpcm
-fate-acodec-roqaudio: ENCOPTS = -ar 22050
-fate-acodec-roqaudio: DECOPTS = -ar 44100
+fate-acodec-roqaudio: ENCOPTS = -af aresample=22050:tsf=s16p
+fate-acodec-roqaudio: DECOPTS = -af aresample=44100:tsf=s16p
 
 FATE_ACODEC-$(call ENCDEC, S302M, MPEGTS, ARESAMPLE_FILTER) += fate-acodec-s302m
 fate-acodec-s302m: FMT = mpegts
 fate-acodec-s302m: CODEC = s302m
-fate-acodec-s302m: ENCOPTS = -ar 48000 -strict -2
-fate-acodec-s302m: DECOPTS = -ar 44100
+fate-acodec-s302m: ENCOPTS = -af aresample=48000:tsf=s16p -strict -2
+fate-acodec-s302m: DECOPTS = -af aresample=44100:tsf=s16p
 
 FATE_ACODEC-$(call ENCDEC, WAVPACK, WV, ARESAMPLE_FILTER) += fate-acodec-wavpack
 fate-acodec-wavpack: FMT = wv

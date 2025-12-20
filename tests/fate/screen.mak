@@ -5,8 +5,9 @@ fate-cscd: CMD = framecrc -i $(TARGET_SAMPLES)/CSCD/sample_video.avi -an -pix_fm
 FATE_SCREEN-$(call FRAMECRC, AVI, DXTORY) += fate-dxtory
 fate-dxtory: CMD = framecrc -i $(TARGET_SAMPLES)/dxtory/dxtory_mic.avi -an
 
-FATE_SCREEN-$(call FRAMECRC, AVI, FIC) += fate-fic-avi
+FATE_SCREEN-$(call FRAMECRC, AVI, FIC) += fate-fic-avi fate-fic-avi-skip_cursor
 fate-fic-avi: CMD = framecrc -i $(TARGET_SAMPLES)/fic/fic-partial-2MB.avi -an
+fate-fic-avi-skip_cursor: CMD = framecrc -skip_cursor 1 -i $(TARGET_SAMPLES)/fic/fic-partial-2MB.avi -an
 
 FATE_FMVC += fate-fmvc-type1
 fate-fmvc-type1: CMD = framecrc -i $(TARGET_SAMPLES)/fmvc/6-methyl-5-hepten-2-one-CC-db_small.avi
@@ -117,7 +118,8 @@ FATE_SCREEN += $(FATE_VMNC-yes)
 fate-vmnc: $(FATE_VMNC-yes)
 
 FATE_ZMBV += fate-zmbv-8bit
-fate-zmbv-8bit: CMD = framecrc -i $(TARGET_SAMPLES)/zmbv/wc2_001-partial.avi -an -pix_fmt rgb24 -vf scale
+# The last frame is corrupted.
+fate-zmbv-8bit: CMD = framecrc -i $(TARGET_SAMPLES)/zmbv/wc2_001-partial.avi -an -frames:v 275 -pix_fmt rgb24 -vf scale
 
 FATE_ZMBV += fate-zmbv-15bit
 fate-zmbv-15bit: CMD = framecrc -i $(TARGET_SAMPLES)/zmbv/zmbv_15bit.avi -pix_fmt rgb24 -t 25 -vf scale

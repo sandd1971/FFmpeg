@@ -36,9 +36,10 @@ pd_1025:  times  8 dd 1025
 
 SECTION .text
 
+
 %macro overlay_row_44 0
 
-cglobal overlay_row_44, 5, 7, 6, 0, d, da, s, a, w, r, x
+cglobal overlay_row_44, 5, 7, 6, 0, dst, da, s, a, w, r, x
     xor          xq, xq
     movsxdifnidn wq, wd
     mov          rq, wq
@@ -52,7 +53,7 @@ cglobal overlay_row_44, 5, 7, 6, 0, d, da, s, a, w, r, x
     .loop:
         pmovzxbw    m0, [sq+xq]
         pmovzxbw    m2, [aq+xq]
-        pmovzxbw    m1, [dq+xq]
+        pmovzxbw    m1, [dstq+xq]
         pmullw      m0, m2
         pxor        m2, m3
         pmullw      m1, m2
@@ -62,9 +63,9 @@ cglobal overlay_row_44, 5, 7, 6, 0, d, da, s, a, w, r, x
         packuswb    m0, m0
 %if cpuflag(avx2)
         vpermpd m0, m0, 216
-        movdqu [dq+xq], xmm0
+        movdqu [dstq+xq], xmm0
 %else
-        movq   [dq+xq], m0
+        movq [dstq+xq], m0
 %endif
         add         xq, mmsize/2
         cmp         xq, wq
@@ -78,7 +79,7 @@ cglobal overlay_row_44, 5, 7, 6, 0, d, da, s, a, w, r, x
 
 %macro overlay_row_22 0
 
-cglobal overlay_row_22, 5, 7, 6, 0, d, da, s, a, w, r, x
+cglobal overlay_row_22, 5, 7, 6, 0, dst, da, s, a, w, r, x
     xor          xq, xq
     movsxdifnidn wq, wd
     sub          wq, 1
@@ -96,8 +97,9 @@ cglobal overlay_row_22, 5, 7, 6, 0, d, da, s, a, w, r, x
         pandn       m2, m3, m1
         psllw       m1, 8
         pavgw       m2, m1
+        pavgw       m2, m1
         psrlw       m2, 8
-        pmovzxbw    m1, [dq+xq]
+        pmovzxbw    m1, [dstq+xq]
         pmullw      m0, m2
         pxor        m2, m3
         pmullw      m1, m2
@@ -107,9 +109,9 @@ cglobal overlay_row_22, 5, 7, 6, 0, d, da, s, a, w, r, x
         packuswb    m0, m0
 %if cpuflag(avx2)
         vpermpd m0, m0, 216
-        movdqu [dq+xq], xmm0
+        movdqu [dstq+xq], xmm0
 %else
-        movq   [dq+xq], m0
+        movq [dstq+xq], m0
 %endif
         add         xq, mmsize/2
         cmp         xq, wq
@@ -123,7 +125,7 @@ cglobal overlay_row_22, 5, 7, 6, 0, d, da, s, a, w, r, x
 
 %macro overlay_row_20 0
 
-cglobal overlay_row_20, 6, 7, 7, 0, d, da, s, a, w, r, x
+cglobal overlay_row_20, 6, 7, 7, 0, dst, da, s, a, w, r, x
     mov         daq, aq
     add         daq, rmp
     xor          xq, xq
@@ -146,7 +148,7 @@ cglobal overlay_row_20, 6, 7, 7, 0, d, da, s, a, w, r, x
         pmaddubsw   m1, m6
         paddw       m2, m1
         psrlw       m2, 2
-        pmovzxbw    m1, [dq+xq]
+        pmovzxbw    m1, [dstq+xq]
         pmullw      m0, m2
         pxor        m2, m3
         pmullw      m1, m2
@@ -156,9 +158,9 @@ cglobal overlay_row_20, 6, 7, 7, 0, d, da, s, a, w, r, x
         packuswb    m0, m0
 %if cpuflag(avx2)
         vpermpd m0, m0, 216
-        movdqu [dq+xq], xmm0
+        movdqu [dstq+xq], xmm0
 %else
-        movq   [dq+xq], m0
+        movq [dstq+xq], m0
 %endif
         add         xq, mmsize/2
         cmp         xq, wq
@@ -172,7 +174,7 @@ cglobal overlay_row_20, 6, 7, 7, 0, d, da, s, a, w, r, x
 
 %macro overlay_row_44_10b 0
 
-cglobal overlay_row_44_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
+cglobal overlay_row_44_10b, 5, 7, 6, 0, dst, da, s, a, w, r, x
     xor          xq, xq
     movsxdifnidn wq, wd
     mov          rq, wq
@@ -186,7 +188,7 @@ cglobal overlay_row_44_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
     .loop:
         pmovzxwd    m0, [sq+xq]
         pmovzxwd    m2, [aq+xq]
-        pmovzxwd    m1, [dq+xq]
+        pmovzxwd    m1, [dstq+xq]
         pmulld      m0, m2
         pxor        m2, m3
         pmulld      m1, m2
@@ -197,9 +199,9 @@ cglobal overlay_row_44_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
         packusdw    m0, m0
 %if cpuflag(avx2)
         vpermpd m0, m0, 216
-        movdqu [dq+xq], xmm0
+        movdqu [dstq+xq], xmm0
 %else
-        movq   [dq+xq], m0
+        movq   [dstq+xq], m0
 %endif
         add         xq, mmsize/2
         cmp         xq, wq
@@ -213,7 +215,7 @@ cglobal overlay_row_44_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
 
 %macro overlay_row_22_10b 0
 
-cglobal overlay_row_22_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
+cglobal overlay_row_22_10b, 5, 7, 6, 0, dst, da, s, a, w, r, x
     xor          xq, xq
     movsxdifnidn wq, wd
     sub          wq, 1
@@ -232,7 +234,8 @@ cglobal overlay_row_22_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
         psrld       m2, 16
         pand        m1, m3, m1
         pavgw       m2, m1
-        pmovzxwd    m1, [dq+xq]
+        pavgw       m2, m1
+        pmovzxwd    m1, [dstq+xq]
         pmulld      m0, m2
         pxor        m2, m3
         pmulld      m1, m2
@@ -243,9 +246,9 @@ cglobal overlay_row_22_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
         packusdw    m0, m0
 %if cpuflag(avx2)
         vpermpd m0, m0, 216
-        movdqu [dq+xq], xmm0
+        movdqu [dstq+xq], xmm0
 %else
-        movq   [dq+xq], m0
+        movq   [dstq+xq], m0
 %endif
         add         xq, mmsize/2
         cmp         xq, wq
@@ -259,7 +262,7 @@ cglobal overlay_row_22_10b, 5, 7, 6, 0, d, da, s, a, w, r, x
 
 %macro overlay_row_20_10b 0
 
-cglobal overlay_row_20_10b, 6, 7, 7, 0, d, da, s, a, w, r, x
+cglobal overlay_row_20_10b, 6, 7, 7, 0, dst, da, s, a, w, r, x
     mov         daq, aq
     add         daq, rmp
     xor          xq, xq
@@ -282,7 +285,7 @@ cglobal overlay_row_20_10b, 6, 7, 7, 0, d, da, s, a, w, r, x
         pmaddwd     m1, m6
         paddd       m2, m1
         psrld       m2, 2
-        pmovzxwd    m1, [dq+xq]
+        pmovzxwd    m1, [dstq+xq]
         pmulld      m0, m2
         pxor        m2, m3
         pmulld      m1, m2
@@ -293,9 +296,9 @@ cglobal overlay_row_20_10b, 6, 7, 7, 0, d, da, s, a, w, r, x
         packusdw    m0, m0
 %if cpuflag(avx2)
         vpermpd m0, m0, 216
-        movdqu [dq+xq], xmm0
+        movdqu [dstq+xq], xmm0
 %else
-        movq   [dq+xq], m0
+        movq   [dstq+xq], m0
 %endif
         add         xq, mmsize/2
         cmp         xq, wq

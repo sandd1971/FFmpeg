@@ -26,7 +26,7 @@
 #include "avcodec.h"
 #include "bytestream.h"
 #include "codec_internal.h"
-#include "internal.h"
+#include "decode.h"
 
 #define HEADER1_CHUNK    0x03
 #define HEADER2_CHUNK    0x3D
@@ -245,8 +245,6 @@ static int pix_decode_frame(AVCodecContext *avctx, AVFrame *frame,
             *pal_out++ = (0xFFU << 24) | bytestream2_get_be32u(&gb);
         bytestream2_skip(&gb, 8);
 
-        frame->palette_has_changed = 1;
-
         chunk_type = bytestream2_get_be32(&gb);
     } else if (avctx->pix_fmt == AV_PIX_FMT_PAL8) {
         /* no palette supplied, use the default one */
@@ -256,8 +254,6 @@ static int pix_decode_frame(AVCodecContext *avctx, AVFrame *frame,
         av_log(avctx, AV_LOG_WARNING,
                "Using default palette, colors might be off.\n");
         memcpy(pal_out, std_pal_table, sizeof(uint32_t) * 256);
-
-        frame->palette_has_changed = 1;
     }
 
     data_len = bytestream2_get_be32(&gb);
@@ -277,8 +273,6 @@ static int pix_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                         bytes_per_scanline,
                         bytes_per_scanline, hdr.height);
 
-    frame->pict_type = AV_PICTURE_TYPE_I;
-    frame->key_frame = 1;
     *got_frame = 1;
 
     return avpkt->size;
@@ -286,7 +280,7 @@ static int pix_decode_frame(AVCodecContext *avctx, AVFrame *frame,
 
 const FFCodec ff_brender_pix_decoder = {
     .p.name         = "brender_pix",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("BRender PIX image"),
+    CODEC_LONG_NAME("BRender PIX image"),
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_BRENDER_PIX,
     .p.capabilities = AV_CODEC_CAP_DR1,

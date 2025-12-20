@@ -38,9 +38,9 @@
 #include "libavutil/opt.h"
 #include "avcodec.h"
 #include "codec_internal.h"
+#include "decode.h"
 #include "get_bits.h"
 #include "g722.h"
-#include "internal.h"
 
 #define OFFSET(x) offsetof(G722Context, x)
 #define AD AV_OPT_FLAG_AUDIO_PARAM | AV_OPT_FLAG_DECODING_PARAM
@@ -63,6 +63,8 @@ static av_cold int g722_decode_init(AVCodecContext * avctx)
     av_channel_layout_uninit(&avctx->ch_layout);
     avctx->ch_layout      = (AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
     avctx->sample_fmt     = AV_SAMPLE_FMT_S16;
+    if (!avctx->sample_rate)
+        avctx->sample_rate = 16000;
 
     c->band[0].scale_factor = 8;
     c->band[1].scale_factor = 2;
@@ -141,7 +143,7 @@ static int g722_decode_frame(AVCodecContext *avctx, AVFrame *frame,
 
 const FFCodec ff_adpcm_g722_decoder = {
     .p.name         = "g722",
-    .p.long_name    = NULL_IF_CONFIG_SMALL("G.722 ADPCM"),
+    CODEC_LONG_NAME("G.722 ADPCM"),
     .p.type         = AVMEDIA_TYPE_AUDIO,
     .p.id           = AV_CODEC_ID_ADPCM_G722,
     .priv_data_size = sizeof(G722Context),
@@ -149,5 +151,4 @@ const FFCodec ff_adpcm_g722_decoder = {
     FF_CODEC_DECODE_CB(g722_decode_frame),
     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
     .p.priv_class   = &g722_decoder_class,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };
