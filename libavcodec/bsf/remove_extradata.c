@@ -29,6 +29,7 @@
 #include "vc1_common.h"
 
 #include "hevc/hevc.h"
+#include "avcodec.h"
 
 enum RemoveFreq {
     REMOVE_FREQ_KEYFRAME,
