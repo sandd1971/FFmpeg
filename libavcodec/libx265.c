@@ -139,22 +139,6 @@ static void rd_release(libx265Context *ctx, int idx)
     memset(&ctx->rd[idx], 0, sizeof(ctx->rd[idx]));
 }
 
-static void X265_log(void *p, int level, const char *fmt, va_list args)
-{
-    static const int level_map[] = {
-        [X265_LOG_ERROR]   = AV_LOG_ERROR,
-        [X265_LOG_WARNING] = AV_LOG_WARNING,
-        [X265_LOG_INFO]    = AV_LOG_INFO,
-        [X265_LOG_DEBUG]   = AV_LOG_DEBUG,
-        [X265_LOG_FULL]    = AV_LOG_TRACE
-    };
-
-    if (level < 0 || level > X265_LOG_FULL)
-        return;
-
-    av_vlog(p, level_map[level], fmt, args);
-}
-
 static av_cold int libx265_encode_close(AVCodecContext *avctx)
 {
     libx265Context *ctx = avctx->priv_data;
@@ -301,9 +285,6 @@ static av_cold int libx265_encode_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-    ctx->params->pf_log          = X265_log;
-    ctx->params->p_log_private   = avctx;
-    ctx->params->logLevel        = X265_LOG_DEBUG;
     ctx->params->frameNumThreads = avctx->thread_count;
     if (avctx->framerate.num > 0 && avctx->framerate.den > 0) {
         ctx->params->fpsNum      = avctx->framerate.num;
