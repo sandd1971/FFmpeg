@@ -869,6 +869,10 @@ typedef struct AVStream {
  */
 #define AVSTREAM_EVENT_FLAG_NEW_PACKETS (1 << 1)
 
+#define AVSTREAM_EVENT_FLAG_VFR (1 << 31)
+#define AVSTREAM_EVENT_FLAG_CFR (1 << 30)
+#define AVSTREAM_EVENT_FLAG_ABNORMAL_TS (1 << 29)
+
     /**
      * Real base framerate of the stream.
      * This is the lowest framerate with which all timestamps can be
@@ -1539,8 +1543,8 @@ typedef struct AVFormatContext {
      * Flags to enable debugging.
      */
     int debug;
-#define FF_FDEBUG_TS        0x0001
-
+#define FF_FDEBUG_TS                       0x0001
+#define FF_FDEBUG_IGNORE_INVALID_TS        0x0002
     /**
      * The maximum number of streams.
      * - encoding: unused

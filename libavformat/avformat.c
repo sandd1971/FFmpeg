@@ -686,6 +686,9 @@ AVRational av_guess_frame_rate(AVFormatContext *format, AVStream *st, AVFrame *f
     const AVCodecDescriptor *desc = cffstream(st)->codec_desc;
     AVRational   avg_fr = st->avg_frame_rate;
 
+    if (fr.num > 0 && fr.den > 0 && (st->event_flags & (AVSTREAM_EVENT_FLAG_CFR|AVSTREAM_EVENT_FLAG_VFR)))
+        return fr;
+
     if (avg_fr.num > 0 && avg_fr.den > 0 && fr.num > 0 && fr.den > 0 &&
         av_q2d(avg_fr) < 70 && av_q2d(fr) > 210) {
         fr = avg_fr;

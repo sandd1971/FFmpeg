@@ -4553,6 +4553,70 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
     msc->current_index = msc->index_ranges[0].start;
 }
 
+static const AVRational g_standardFramerate[] =
+{
+    { 5, 1 },
+    { 6, 1 },
+    { 10, 1 },
+    { 12, 1 },
+    { 15, 1 },
+    { 18, 1 },
+    { 20, 1 },
+    { 24000, 1001 },
+    { 24, 1 },
+    { 25, 1 },
+    { 30000, 1001 },
+    { 30, 1 },
+    { 50, 1 },
+    { 60000, 1001 },
+    { 60, 1 },
+    { 100, 1 },
+    { 120, 1 },
+    { 150, 1 },
+    { 200, 1 },
+    { 240, 1 },
+};
+
+static int getFramerateIndex(double fps)
+{
+    double diffMax = 10000.0;
+    int selIndex = -1;
+    for (int i = 0; i < FF_ARRAY_ELEMS(g_standardFramerate); i++)
+    {
+        double diff = fabs(fps - av_q2d(g_standardFramerate[i]));
+        if (diff < diffMax)
+        {
+            diffMax = diff;
+            selIndex = i;
+        }
+    }
+
+    if (selIndex >= 0 && selIndex < FF_ARRAY_ELEMS(g_standardFramerate))
+        return selIndex;
+
+    return -1;
+}
+
+static int isValidFramerate(double fps)
+{
+    if (fps >= av_q2d(g_standardFramerate[0]) &&
+        fps <= av_q2d(g_standardFramerate[FF_ARRAY_ELEMS(g_standardFramerate)-1]))
+        return 1;
+
+    return 0;
+}
+
+static int miscNormalizeFramerate(double fps, int* num, int* den)
+{
+    int nFmt = getFramerateIndex(fps);
+    if (nFmt < 0 || nFmt >= FF_ARRAY_ELEMS(g_standardFramerate))
+        return 0;
+
+    *num = g_standardFramerate[nFmt].num;
+    *den = g_standardFramerate[nFmt].den;
+    return 1;
+}
+
 static uint32_t get_sgpd_sync_index(const MOVStreamContext *sc, int nal_unit_type)
 {
     for (uint32_t i = 0; i < sc->sgpd_sync_count; i++)
@@ -5001,6 +5065,111 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
     }
 
     mov_estimate_video_delay(mov, st);
+
+    // Normalize the Real base framerate of the stream.
+    if (mov->normalize_frame_rate && st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && sti->nb_index_entries > 0) {
+        int64_t min_duration = 0;
+        int64_t max_duration = 0;
+        int64_t total_duration = 0;
+        for (i = 1; i < sti->nb_index_entries; i++) {
+            int64_t cur_duration = sti->index_entries[i].timestamp - sti->index_entries[i - 1].timestamp;
+            if (cur_duration > 0) {
+                if ((cur_duration < min_duration || min_duration == 0) &&
+                    isValidFramerate(1 / (cur_duration * av_q2d(st->time_base))))
+                    min_duration = cur_duration;
+                if ((cur_duration > max_duration || max_duration == 0) &&
+                    isValidFramerate(1 / (cur_duration * av_q2d(st->time_base))))
+                    max_duration = cur_duration;
+                total_duration += cur_duration;
+            }
+        }
+        st->event_flags &= ~(AVSTREAM_EVENT_FLAG_CFR | AVSTREAM_EVENT_FLAG_VFR);
+        if (min_duration > 0 && max_duration > 0) {
+            AVRational fps_max;
+            AVRational fps_min;
+            AVRational fps_avg;
+            if (!miscNormalizeFramerate((sti->nb_index_entries - 1) / (total_duration * av_q2d(st->time_base)),
+                &fps_avg.num, &fps_avg.den))
+                fps_avg = (AVRational){25, 1};
+            if (!miscNormalizeFramerate(1 / (min_duration * av_q2d(st->time_base)), &fps_max.num, &fps_max.den))
+                fps_max = fps_avg;
+            if (!miscNormalizeFramerate(1 / (max_duration * av_q2d(st->time_base)), &fps_min.num, &fps_min.den))
+                fps_min = fps_avg;
+            if (fabs(av_q2d(fps_max) - av_q2d(fps_min)) < 0.1)
+                st->event_flags |= AVSTREAM_EVENT_FLAG_CFR;
+            else
+                st->event_flags |= AVSTREAM_EVENT_FLAG_VFR;
+            if (av_q2d(fps_max) >= av_q2d(fps_avg) + 1.001 &&
+                av_q2d(fps_max) <= 2.5 * av_q2d(fps_avg))
+                st->r_frame_rate = fps_max;
+            else
+                st->r_frame_rate = fps_avg;
+
+/*            if (sti->nb_index_entries > 1) {
+                AVRational _27mhz = { 1, 27000000 };
+                int64_t field_step = av_rescale(_27mhz.den, st->r_frame_rate.den, st->r_frame_rate.num * 2);
+                int64_t current_timestamp = av_rescale_q(sti->index_entries[0].timestamp, st->time_base, _27mhz);
+                sti->index_entries[0].timestamp = av_rescale_q(current_timestamp, _27mhz, st->time_base);
+                for (i = 1; i < sti->nb_index_entries; i++) {
+                    int64_t target_timestamp = av_rescale_q(sti->index_entries[i].timestamp, st->time_base, _27mhz);
+                    if (llabs(target_timestamp - current_timestamp) >= _27mhz.den * 2) {
+                        current_timestamp = target_timestamp;
+                        continue;
+                    }
+                    for (int field = 0; field < 4; field++) {
+                        current_timestamp += field_step;
+                        if (current_timestamp > target_timestamp - field_step / 2)
+                            break;
+                    }
+                    sti->index_entries[i].timestamp = av_rescale_q(current_timestamp, _27mhz, st->time_base);
+                }
+                st->duration = av_rescale_q(st->duration, st->time_base, _27mhz);
+                for (int field = 0; field < 4; field++) {
+                    current_timestamp += field_step;
+                    if (current_timestamp > st->duration - field_step / 2)
+                        break;
+                }
+                st->duration = av_rescale_q(current_timestamp, _27mhz, st->time_base);
+            }*/
+        }
+    }
+
+    if (!mov->check_timestamp)
+        return;
+
+    if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && sti->nb_index_entries > 0) {
+        int error_count = 0;
+        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
+        for (i = 1; i < sti->nb_index_entries; i++) {
+            int64_t cur_duration = sti->index_entries[i].timestamp - sti->index_entries[i - 1].timestamp;
+            if (cur_duration * av_q2d(st->time_base) < 0.001 || cur_duration * av_q2d(st->time_base) > 1) {
+                error_count++;
+                if (error_count > 10) {
+                    st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && sti->nb_index_entries > 0) {
+        int error_count = 0;
+        st->event_flags &= ~AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
+        for (i = 1; i < sti->nb_index_entries; i++) {
+            double duration = av_get_audio_frame_duration2(st->codecpar, sti->index_entries[i - 1].size) * 1.0 / st->codecpar->sample_rate;
+            if (duration > 0) {
+                double calc_timestamp = sti->index_entries[i - 1].timestamp * av_q2d(st->time_base) + duration;
+                double real_timestamp = sti->index_entries[i].timestamp * av_q2d(st->time_base);
+                if (fabs(real_timestamp - calc_timestamp) > 1.0) {
+                    error_count++;
+                    if (error_count > 10) {
+                        st->event_flags |= AVSTREAM_EVENT_FLAG_ABNORMAL_TS;
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
 
 static int test_same_origin(const char *src, const char *ref) {
@@ -5284,7 +5453,7 @@ static int mov_read_trak(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                 continue;
             stts_constant = 0;
         }
-        if (stts_constant)
+        if (st->r_frame_rate.num == 0 && stts_constant)
             av_reduce(&st->r_frame_rate.num, &st->r_frame_rate.den,
                       sc->time_scale, sc->tts_data[0].duration, INT_MAX);
 #endif
@@ -11654,6 +11823,8 @@ static const AVOption mov_options[] = {
         {.i64 = 0}, 0, 1, FLAGS },
     { "max_stts_delta", "treat offsets above this value as invalid", OFFSET(max_stts_delta), AV_OPT_TYPE_INT, {.i64 = UINT_MAX-48000*10 }, 0, UINT_MAX, .flags = AV_OPT_FLAG_DECODING_PARAM },
     { "interleaved_read", "Interleave packets from multiple tracks at demuxer level", OFFSET(interleaved_read), AV_OPT_TYPE_BOOL, {.i64 = 1 }, 0, 1, .flags = AV_OPT_FLAG_DECODING_PARAM },
+    { "normalize_frame_rate", "Normalize the real base framerate of the video stream", OFFSET(normalize_frame_rate), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, FLAGS},
+    { "check_timestamp", "check the abnormal timestamp of the video/audio stream", OFFSET(check_timestamp), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, FLAGS},
 
     { NULL },
 };
